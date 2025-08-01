@@ -11,6 +11,8 @@ const RegisterPage = () => {
     email: '',
     phone: '',
     rollNumber: '',
+    password: '',
+    confirmPassword: '',
     userType: '',
     terms: false,
     newsletter: false
@@ -41,6 +43,10 @@ const RegisterPage = () => {
     else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Email is invalid';
     if (!formData.phone.trim()) newErrors.phone = 'Phone number is required';
     if (!formData.rollNumber.trim()) newErrors.rollNumber = 'Roll number is required';
+    if (!formData.password) newErrors.password = 'Password is required';
+    else if (formData.password.length < 6) newErrors.password = 'Password must be at least 6 characters';
+    if (!formData.confirmPassword) newErrors.confirmPassword = 'Please confirm your password';
+    else if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
     if (!formData.userType) newErrors.userType = 'Please select an account type';
     if (!formData.terms) newErrors.terms = 'You must agree to the terms of service';
     setErrors(newErrors);
@@ -51,10 +57,52 @@ const RegisterPage = () => {
     e.preventDefault();
     if (!validateForm()) return;
     setIsLoading(true);
-    setTimeout(() => {
-      console.log('Register attempt:', formData);
+
+    try {
+      // Prepare data for backend (matching our MongoDB schema)
+      const userData = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        password: formData.password,
+        userType: formData.userType,
+        newsletter: formData.newsletter,
+        // Additional fields for student registration
+        collegeName: formData.collegeName,
+        branch: formData.branch,
+        yearOfStudy: formData.yearOfStudy,
+        rollNumber: formData.rollNumber
+      };
+
+      console.log('📝 Sending registration data:', userData);
+
+      // Make API call to backend
+      const response = await fetch('http://localhost:5000/api/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData)
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        console.log('✅ Registration successful:', result);
+        alert('Registration successful! Welcome to our platform.');
+        // You can redirect to login page or dashboard here
+        // window.location.href = '/login';
+      } else {
+        console.error('❌ Registration failed:', result.message);
+        alert(result.message || 'Registration failed. Please try again.');
+      }
+    } catch (error) {
+      console.error('❌ Registration error:', error);
+      alert('An error occurred. Please check your connection and try again.');
+    } finally {
       setIsLoading(false);
-    }, 2000);
+    }
   };
 
   return (
@@ -200,6 +248,38 @@ const RegisterPage = () => {
               />
             </div>
             {errors.rollNumber && <span className="error-message">{errors.rollNumber}</span>}
+          </div>
+          <div className="form-group">
+            <div className="input-icon">
+              <i className="fas fa-lock"></i>
+              <input
+                type="password"
+                id="password"
+                name="password"
+                placeholder="Create password"
+                value={formData.password}
+                onChange={handleChange}
+                className={errors.password ? 'error' : ''}
+                required
+              />
+            </div>
+            {errors.password && <span className="error-message">{errors.password}</span>}
+          </div>
+          <div className="form-group">
+            <div className="input-icon">
+              <i className="fas fa-lock"></i>
+              <input
+                type="password"
+                id="confirmPassword"
+                name="confirmPassword"
+                placeholder="Confirm password"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                className={errors.confirmPassword ? 'error' : ''}
+                required
+              />
+            </div>
+            {errors.confirmPassword && <span className="error-message">{errors.confirmPassword}</span>}
           </div>
           <div className="form-group">
             <select
