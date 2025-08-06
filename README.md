@@ -1,138 +1,189 @@
-# Hiring Platform - React Application
+# Hiring Platform
 
-A modern, responsive hiring platform built with React JS featuring login and signup functionality with beautiful UI/UX design.
+A modern job hiring platform with MongoDB backend integration for user registration and management.
 
 ## Features
 
-- 🎨 **Modern Design**: Clean, professional interface with gradient backgrounds and smooth animations
-- 📱 **Responsive**: Fully responsive design that works on desktop, tablet, and mobile devices
-- 🔐 **Authentication**: Complete login and signup forms with validation
-- 🎯 **User Experience**: Intuitive navigation and smooth transitions
-- ♿ **Accessibility**: Proper focus states, semantic HTML, and keyboard navigation
-- 🚀 **Performance**: Optimized React components with efficient state management
+- **User Registration**: Complete signup form with MongoDB storage
+- **Password Security**: Bcrypt hashing for secure password storage
+- **Form Validation**: Real-time password strength and confirmation validation
+- **Responsive Design**: Modern UI with mobile-friendly layout
+- **User Types**: Support for Job Seekers, Employers, and Recruiters
 
-## Pages
+## Prerequisites
 
-1. **Landing Page** (`/`) - Homepage with hero section and feature highlights
-2. **Login Page** (`/login`) - User authentication with email/password and social login options
-3. **Signup Page** (`/signup`) - User registration with comprehensive form validation
+Before running this application, make sure you have the following installed:
 
-## Technologies Used
+- **Node.js** (version 14 or higher)
+- **MongoDB** (running locally or MongoDB Atlas connection)
+- **npm** (comes with Node.js)
 
-- **React 18** - Modern React with hooks and functional components
-- **React Router DOM** - Client-side routing
-- **Font Awesome** - Beautiful icons throughout the interface
-- **CSS3** - Modern styling with gradients, animations, and responsive design
+## Installation
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js (version 14 or higher)
-- npm or yarn package manager
-
-### Installation
-
-1. **Clone the repository** (if using git):
-   ```bash
-   git clone <repository-url>
-   cd hiring-platform
-   ```
+1. **Clone or download the project files**
 
 2. **Install dependencies**:
    ```bash
    npm install
    ```
 
-3. **Start the development server**:
+3. **Install additional backend dependencies**:
    ```bash
-   npm start
+   npm install express mongoose cors bcryptjs
    ```
 
-4. **Open your browser** and navigate to `http://localhost:3000`
+4. **Set up MongoDB**:
+   - **Option 1**: Install MongoDB locally
+     - Download and install MongoDB Community Server
+     - Start MongoDB service
+   
+   - **Option 2**: Use MongoDB Atlas (Cloud)
+     - Create a free account at [MongoDB Atlas](https://www.mongodb.com/atlas)
+     - Create a cluster and get your connection string
+     - Update the connection string in `server.js`
 
-### Available Scripts
+## Configuration
 
-- `npm start` - Runs the app in development mode
-- `npm run build` - Builds the app for production
-- `npm test` - Launches the test runner
-- `npm run eject` - Ejects from Create React App (not recommended)
+### MongoDB Connection
 
-## Project Structure
+If using MongoDB Atlas, update the connection string in `server.js`:
 
+```javascript
+// Replace with your MongoDB Atlas connection string
+mongoose.connect('mongodb+srv://username:password@cluster.mongodb.net/hiring_platform', {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+});
 ```
-src/
-├── components/
-│   ├── LandingPage.js      # Homepage component
-│   ├── LoginPage.js        # Login form component
-│   └── SignupPage.js       # Signup form component
-├── App.js                  # Main app component with routing
-├── App.css                 # App-specific styles
-├── index.js                # Application entry point
-└── index.css               # Global styles and component styles
+
+## Running the Application
+
+### Development Mode (Both Frontend and Backend)
+
+```bash
+npm run dev
 ```
 
-## Form Validation
+This will start both the React frontend (port 3000) and the Node.js backend (port 3001).
 
-The signup form includes comprehensive validation:
+### Backend Only
 
-- **Required Fields**: All mandatory fields are validated
-- **Email Format**: Proper email format validation
-- **Password Strength**: Minimum 6 characters required
-- **Password Confirmation**: Passwords must match
-- **Terms Agreement**: Users must agree to terms of service
-- **Real-time Validation**: Errors clear as users type
+```bash
+npm run server
+```
 
-## Customization
+### Frontend Only
 
-### Styling
-All styles are in `src/index.css`. The design uses a consistent color scheme:
-- Primary: `#667eea` to `#764ba2` (gradient)
-- Error: `#e74c3c`
-- Text: `#333` (dark), `#666` (medium)
+```bash
+npm start
+```
 
-### Adding New Pages
-1. Create a new component in `src/components/`
-2. Add the route in `src/App.js`
-3. Import and use the component
+## API Endpoints
 
-### Backend Integration
-The forms are currently set up with placeholder API calls. To integrate with a backend:
+### POST /api/signup
+Registers a new user in the database.
 
-1. Replace the `setTimeout` calls in form handlers with actual API calls
-2. Add proper error handling for API responses
-3. Implement authentication state management (e.g., with Context API or Redux)
+**Request Body:**
+```json
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "email": "john@example.com",
+  "phone": "+1234567890",
+  "password": "securepassword",
+  "userType": "jobseeker",
+  "newsletter": true
+}
+```
 
-## Browser Support
+**Response:**
+```json
+{
+  "success": true,
+  "message": "User registered successfully",
+  "user": {
+    "id": "user_id",
+    "firstName": "John",
+    "lastName": "Doe",
+    "email": "john@example.com",
+    "userType": "jobseeker"
+  }
+}
+```
 
-- Chrome (latest)
-- Firefox (latest)
-- Safari (latest)
-- Edge (latest)
+## Database Schema
 
-## Performance
+### User Collection
+```javascript
+{
+  firstName: String (required),
+  lastName: String (required),
+  email: String (required, unique),
+  phone: String (required),
+  password: String (required, hashed),
+  userType: String (enum: ['jobseeker', 'employer', 'recruiter']),
+  newsletter: Boolean (default: false),
+  createdAt: Date (default: current timestamp)
+}
+```
 
-- Optimized bundle size
-- Efficient component rendering
-- Smooth animations with CSS transitions
-- Responsive images and assets
+## Security Features
+
+- **Password Hashing**: All passwords are hashed using bcrypt
+- **Input Validation**: Server-side validation for all form fields
+- **CORS Protection**: Configured for secure cross-origin requests
+- **Error Handling**: Comprehensive error handling and user feedback
+
+## File Structure
+
+Company-Hiring-Platform/
+├── 📁 backend/
+│   └── server.js              # ✅ Node.js + MongoDB backend
+├── 📁 src/
+│   ├── 📁 components/
+│   │   ├── SignupPage.js      # ✅ React signup (MongoDB connected)
+│   │   ├── LoginPage.js       # ✅ React login
+│   │   ├── LandingPage.js     # ✅ React landing
+│   │   └── Dashboard.js       # ✅ React dashboard
+│   ├── App.js                 # ✅ React routing
+│   ├── App.css                # ✅ React styles
+│   ├── index.js               # ✅ React entry point
+│   └── index.css              # ✅ Global styles
+├── 📁 public/
+│   └── index.html             # ✅ React public HTML
+├── package.json               # ✅ Updated scripts & dependencies
+├── .gitignore                 # ✅ Comprehensive ignore rules
+└── README.md                  # ✅ Documentation
+
+## Troubleshooting
+
+### Common Issues
+
+1. **MongoDB Connection Error**
+   - Ensure MongoDB is running locally or Atlas connection string is correct
+   - Check if the database name is correct
+
+2. **Port Already in Use**
+   - Change the port in `server.js` if port 3000 is occupied
+   - Update the fetch URL in signup.html accordingly
+
+3. **CORS Errors**
+   - The backend is configured with CORS enabled
+   - If issues persist, check browser console for specific errors
+
+### Getting Help
+
+If you encounter any issues:
+1. Check the browser console for JavaScript errors
+2. Check the terminal for server-side errors
+3. Ensure all dependencies are installed correctly
+4. Verify MongoDB connection
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## License
-
-This project is open source and available under the [MIT License](LICENSE).
-
-## Support
-
-For support or questions, please open an issue in the repository or contact the development team.
-
----
-
-**Happy Coding! 🚀** 
+Feel free to contribute to this project by:
+- Adding new features
+- Improving the UI/UX
+- Fixing bugs
+- Adding more validation rules
+- Implementing additional security measures
