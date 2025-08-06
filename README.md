@@ -187,7 +187,3 @@ Feel free to contribute to this project by:
 - Fixing bugs
 - Adding more validation rules
 - Implementing additional security measures
-
-## License
-
-This project is open source and available under the MIT License. 

@@ -17,7 +17,6 @@ const RegisterPage = () => {
     terms: false,
     newsletter: false
   });
-
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
 
@@ -78,7 +77,7 @@ const RegisterPage = () => {
       console.log('📝 Sending registration data:', userData);
 
       // Make API call to backend
-      const response = await fetch('http://localhost:5000/api/signup', {
+      const response = await fetch('/api/signup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
