@@ -62,20 +62,6 @@ const userSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
-    password: {
-        type: String,
-        required: true
-    },
-    userType: {
-        type: String,
-        required: true,
-        enum: ['jobseeker', 'employer', 'recruiter']
-    },
-    newsletter: {
-        type: Boolean,
-        default: false
-    },
-    // Additional student fields
     collegeName: {
         type: String,
         trim: true
@@ -91,6 +77,10 @@ const userSchema = new mongoose.Schema({
     rollNumber: {
         type: String,
         trim: true
+    },
+    terms: {
+        type: Boolean,
+        required: true
     },
     createdAt: {
         type: Date,
@@ -115,17 +105,12 @@ app.get('/login', (req, res) => {
 
 // API Routes
 app.post('/api/signup', async (req, res) => {
-    console.log('📝 Received signup request:', req.body);
-    
     try {
         const { 
             firstName, 
             lastName, 
             email, 
             phone, 
-            password, 
-            userType, 
-            newsletter,
             collegeName,
             branch,
             yearOfStudy,
@@ -133,7 +118,7 @@ app.post('/api/signup', async (req, res) => {
         } = req.body;
 
         // Validate required fields
-        if (!firstName || !lastName || !email || !phone || !password || !userType) {
+        if (!firstName || !lastName || !email || !phone || !collegeName || !branch || !yearOfStudy || !rollNumber) {
             console.log('❌ Missing required fields');
             return res.status(400).json({ 
                 success: false, 
@@ -152,11 +137,6 @@ app.post('/api/signup', async (req, res) => {
             });
         }
 
-        console.log('🔐 Hashing password...');
-        // Hash password
-        const saltRounds = 10;
-        const hashedPassword = await bcrypt.hash(password, saltRounds);
-
         console.log('👤 Creating new user...');
         // Create new user with all fields
         const newUser = new User({
@@ -164,25 +144,23 @@ app.post('/api/signup', async (req, res) => {
             lastName,
             email,
             phone,
-            password: hashedPassword,
-            userType,
-            newsletter: newsletter || false,
             collegeName,
             branch,
             yearOfStudy,
-            rollNumber
+            rollNumber,
+            terms: true
         });
 
         console.log('💾 Saving user to database...');
         await newUser.save();
         console.log('✅ User saved successfully!');
         console.log('📊 User ID:', newUser._id);
-        console.log('🎓 Student details:', {
-            collegeName: newUser.collegeName,
-            branch: newUser.branch,
-            yearOfStudy: newUser.yearOfStudy,
-            rollNumber: newUser.rollNumber
-        });
+        // console.log('🎓 Student details:', {
+        //     collegeName: newUser.collegeName,
+        //     branch: newUser.branch,
+        //     yearOfStudy: newUser.yearOfStudy,
+        //     rollNumber: newUser.rollNumber
+        // });
 
         res.status(201).json({
             success: true,
@@ -192,7 +170,6 @@ app.post('/api/signup', async (req, res) => {
                 firstName: newUser.firstName,
                 lastName: newUser.lastName,
                 email: newUser.email,
-                userType: newUser.userType,
                 collegeName: newUser.collegeName,
                 branch: newUser.branch,
                 yearOfStudy: newUser.yearOfStudy,
@@ -217,9 +194,11 @@ app.post('/api/test-user', async (req, res) => {
             lastName: 'User',
             email: 'test@example.com',
             phone: '+1234567890',
-            password: await bcrypt.hash('password123', 10),
-            userType: 'jobseeker',
-            newsletter: false
+            collegeName: 'Test College',
+            branch: 'Test Branch',
+            yearOfStudy: '1',
+            rollNumber: 'TST123',
+            terms: true
         });
         
         await testUser.save();
