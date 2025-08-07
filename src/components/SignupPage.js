@@ -11,7 +11,6 @@ const RegisterPage = () => {
     email: '',
     phone: '',
     rollNumber: '',
-    terms: false
   });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
@@ -239,12 +238,10 @@ const RegisterPage = () => {
           <div className="form-group">
             <div className="input-icon">
               <i className="fas fa-lock"></i>
-            </div>
           </div>
           <div className="form-group">
             <div className="input-icon">
               <i className="fas fa-lock"></i>
-            </div>
           </div>
           <div className="form-options">
             <label className="checkbox-container">
