@@ -11,11 +11,6 @@ const RegisterPage = () => {
     email: '',
     phone: '',
     rollNumber: '',
-    password: '',
-    confirmPassword: '',
-    userType: '',
-    terms: false,
-    newsletter: false
   });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
@@ -42,11 +37,6 @@ const RegisterPage = () => {
     else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Email is invalid';
     if (!formData.phone.trim()) newErrors.phone = 'Phone number is required';
     if (!formData.rollNumber.trim()) newErrors.rollNumber = 'Roll number is required';
-    if (!formData.password) newErrors.password = 'Password is required';
-    else if (formData.password.length < 6) newErrors.password = 'Password must be at least 6 characters';
-    if (!formData.confirmPassword) newErrors.confirmPassword = 'Please confirm your password';
-    else if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
-    if (!formData.userType) newErrors.userType = 'Please select an account type';
     if (!formData.terms) newErrors.terms = 'You must agree to the terms of service';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -64,9 +54,6 @@ const RegisterPage = () => {
         lastName: formData.lastName,
         email: formData.email,
         phone: formData.phone,
-        password: formData.password,
-        userType: formData.userType,
-        newsletter: formData.newsletter,
         // Additional fields for student registration
         collegeName: formData.collegeName,
         branch: formData.branch,
@@ -251,50 +238,10 @@ const RegisterPage = () => {
           <div className="form-group">
             <div className="input-icon">
               <i className="fas fa-lock"></i>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                placeholder="Create password"
-                value={formData.password}
-                onChange={handleChange}
-                className={errors.password ? 'error' : ''}
-                required
-              />
-            </div>
-            {errors.password && <span className="error-message">{errors.password}</span>}
           </div>
           <div className="form-group">
             <div className="input-icon">
               <i className="fas fa-lock"></i>
-              <input
-                type="password"
-                id="confirmPassword"
-                name="confirmPassword"
-                placeholder="Confirm password"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                className={errors.confirmPassword ? 'error' : ''}
-                required
-              />
-            </div>
-            {errors.confirmPassword && <span className="error-message">{errors.confirmPassword}</span>}
-          </div>
-          <div className="form-group">
-            <select
-              id="userType"
-              name="userType"
-              className={`form-select ${errors.userType ? 'error' : ''}`}
-              value={formData.userType}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Select account type</option>
-              <option value="jobseeker">Job Seeker</option>
-              <option value="employer">Employer</option>
-              <option value="recruiter">Recruiter</option>
-            </select>
-            {errors.userType && <span className="error-message">{errors.userType}</span>}
           </div>
           <div className="form-options">
             <label className="checkbox-container">
@@ -309,16 +256,6 @@ const RegisterPage = () => {
               I agree to the <a href="#" className="terms-link">Terms of Service</a> and <a href="#" className="terms-link">Privacy Policy</a>
             </label>
             {errors.terms && <span className="error-message">{errors.terms}</span>}
-            <label className="checkbox-container">
-              <input
-                type="checkbox"
-                name="newsletter"
-                checked={formData.newsletter}
-                onChange={handleChange}
-              />
-              <span className="checkmark"></span>
-              Subscribe to our newsletter for job updates
-            </label>
           </div>
           <button 
             type="submit" 
