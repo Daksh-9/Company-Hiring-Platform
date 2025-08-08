@@ -78,6 +78,10 @@ const userSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    terms: {
+        type: Boolean,
+        required: true
+    },
     createdAt: {
         type: Date,
         default: Date.now
@@ -114,6 +118,8 @@ app.post('/api/signup', async (req, res) => {
         } = req.body;
 
         // Validate required fields
+
+        if (!firstName || !lastName || !email || !phone || !collegeName || !branch || !yearOfStudy || !rollNumber) {
             console.log('❌ Missing required fields');
             return res.status(400).json({ 
                 success: false, 
@@ -138,12 +144,25 @@ app.post('/api/signup', async (req, res) => {
             lastName,
             email,
             phone,
+
+            collegeName,
+            branch,
+            yearOfStudy,
+            rollNumber,
+            terms: true
         });
 
         console.log('💾 Saving user to database...');
         await newUser.save();
         console.log('✅ User saved successfully!');
         console.log('📊 User ID:', newUser._id);
+
+        // console.log('🎓 Student details:', {
+        //     collegeName: newUser.collegeName,
+        //     branch: newUser.branch,
+        //     yearOfStudy: newUser.yearOfStudy,
+        //     rollNumber: newUser.rollNumber
+        // });
         res.status(201).json({
             success: true,
             message: 'User registered successfully',
@@ -176,6 +195,12 @@ app.post('/api/test-user', async (req, res) => {
             lastName: 'User',
             email: 'test@example.com',
             phone: '+1234567890',
+
+            collegeName: 'Test College',
+            branch: 'Test Branch',
+            yearOfStudy: '1',
+            rollNumber: 'TST123',
+            terms: true
         });
         
         await testUser.save();
