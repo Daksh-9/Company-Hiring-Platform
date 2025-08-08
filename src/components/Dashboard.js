@@ -13,7 +13,6 @@ const Dashboard = () => {
     // Clear any stored user data
     localStorage.removeItem('user');
     sessionStorage.clear();
-
     // Redirect to login page
     navigate('/');
   };
@@ -25,7 +24,30 @@ const Dashboard = () => {
         <div className="nav-left">
           <Link to="/dashboard" className="logo">
             <i className="fas fa-briefcase"></i> Embinsys
+
           </Link>
+          <ul>
+            <li>
+              <Link to="/job-profiles">
+                <i className="fas fa-briefcase"></i> <span>Job Profiles</span>
+              </Link>
+            </li>
+            <li>
+              <Link to="/my-profile">
+                <i className="fas fa-user"></i> <span>My Profile</span>
+              </Link>
+            </li>
+            <li>
+              <Link to="/assessments">
+                <i className="fas fa-tasks"></i> <span>Assessments</span>
+              </Link>
+            </li>
+            <li>
+              <Link to="/help">
+                <i className="fas fa-question-circle"></i> <span>Help</span>
+              </Link>
+            </li>
+          </ul>
         </div>
         <div className="nav-center">
           <h1>Student Dashboard</h1>
