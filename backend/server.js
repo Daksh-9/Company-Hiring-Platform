@@ -114,13 +114,13 @@ app.post('/api/signup', async (req, res) => {
         } = req.body;
 
         // Validate required fields
+        if (!firstName || !lastName || !email || !phone || !collegeName || !branch || !yearOfStudy || !rollNumber) {
             console.log('❌ Missing required fields');
             return res.status(400).json({ 
                 success: false, 
                 message: 'All fields are required' 
             });
         }
-
         console.log('🔍 Checking if user already exists...');
         // Check if user already exists
         const existingUser = await User.findOne({ email });
@@ -138,6 +138,10 @@ app.post('/api/signup', async (req, res) => {
             lastName,
             email,
             phone,
+            collegeName,
+            branch,
+            yearOfStudy,
+            rollNumber
         });
 
         console.log('💾 Saving user to database...');
