@@ -995,6 +995,11 @@ select:focus {
 }
 
 /* Error states */
+/* Simple utility to support subtle fade in for cards */
+.fade-in {
+  animation: fadeInUp 0.35s ease-out;
+}
+
 input.error,
 select.error {
   border-color: #e74c3c;

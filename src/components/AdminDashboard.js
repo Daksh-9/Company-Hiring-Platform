@@ -12,7 +12,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     const token = localStorage.getItem('adminToken');
     if (!token) {
-      navigate('/admin/login');
+      navigate('/login');
       return;
     }
     setIsAuthenticated(true);
@@ -21,7 +21,7 @@ const AdminDashboard = () => {
   const handleLogout = () => {
     localStorage.removeItem('adminToken');
     localStorage.removeItem('adminID');
-    navigate('/admin/login');
+    navigate('/login');
   };
 
   if (!isAuthenticated) {
