@@ -5,9 +5,7 @@ import LandingPage from './components/LandingPage';
 import LoginPage from './components/LoginPage';
 import SignupPage from './components/SignupPage';
 import Dashboard from './components/Dashboard';
-import AdminLogin from './components/AdminLogin';
 import AdminDashboard from './components/AdminDashboard';
-import TailwindTest from './components/TailwindTest';
 
 function App() {
   return (
@@ -18,9 +16,8 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<SignupPage />} />
           <Route path="/dashboard/*" element={<Dashboard />} />
-          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin/login" element={<LoginPage />} />
           <Route path="/admin/dashboard/*" element={<AdminDashboard />} />
-          <Route path="/tailwind-test" element={<TailwindTest />} />
         </Routes>
       </div>
     </Router>
