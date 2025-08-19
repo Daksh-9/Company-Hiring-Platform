@@ -3,7 +3,12 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const csv = require('csv-parser');
+const nodemailer = require('nodemailer');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -90,6 +95,117 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model('User', userSchema);
 
+// Admin Schema
+const adminSchema = new mongoose.Schema({
+    adminID: {
+        type: String,
+        required: true,
+        unique: true,
+        trim: true
+    },
+    password: {
+        type: String,
+        required: true
+    },
+    email: {
+        type: String,
+        required: true,
+        trim: true,
+        lowercase: true
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now
+    }
+});
+
+const Admin = mongoose.model('Admin', adminSchema);
+
+// Question Schema
+const questionSchema = new mongoose.Schema({
+    question: {
+        type: String,
+        required: true
+    },
+    optionA: String,
+    optionB: String,
+    optionC: String,
+    optionD: String,
+    correctAnswer: String,
+    testType: {
+        type: String,
+        enum: ['MCQ', 'Coding', 'Paragraph'],
+        required: true
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now
+    }
+});
+
+const Question = mongoose.model('Question', questionSchema);
+
+// Result Schema
+const resultSchema = new mongoose.Schema({
+    studentId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
+    testType: {
+        type: String,
+        enum: ['MCQ', 'Coding', 'Paragraph'],
+        required: true
+    },
+    score: {
+        type: Number,
+        required: true
+    },
+    totalQuestions: {
+        type: Number,
+        required: true
+    },
+    completedAt: {
+        type: Date,
+        default: Date.now
+    }
+});
+
+const Result = mongoose.model('Result', resultSchema);
+
+// JWT Secret
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+
+// Auth Middleware
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({ message: 'Access token required' });
+    }
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) {
+            return res.status(403).json({ message: 'Invalid token' });
+        }
+        req.user = user;
+        next();
+    });
+};
+
+// Multer configuration for file uploads
+const upload = multer({ dest: 'uploads/' });
+
+// Email transporter
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER || 'your-email@gmail.com',
+        pass: process.env.EMAIL_PASS || 'your-app-password'
+    }
+});
+
 // Routes
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
@@ -118,15 +234,13 @@ app.post('/api/signup', async (req, res) => {
         } = req.body;
 
         // Validate required fields
-
-        if (!firstName || !lastName || !email || !phone || !collegeName || !branch || !yearOfStudy || !rollNumber) {
+        if (!firstName || !lastName || !email || !phone) {
             console.log('❌ Missing required fields');
             return res.status(400).json({ 
                 success: false, 
                 message: 'All fields are required' 
             });
         }
-
         console.log('🔍 Checking if user already exists...');
         // Check if user already exists
         const existingUser = await User.findOne({ email });
@@ -144,7 +258,6 @@ app.post('/api/signup', async (req, res) => {
             lastName,
             email,
             phone,
-
             collegeName,
             branch,
             yearOfStudy,
@@ -157,12 +270,6 @@ app.post('/api/signup', async (req, res) => {
         console.log('✅ User saved successfully!');
         console.log('📊 User ID:', newUser._id);
 
-        // console.log('🎓 Student details:', {
-        //     collegeName: newUser.collegeName,
-        //     branch: newUser.branch,
-        //     yearOfStudy: newUser.yearOfStudy,
-        //     rollNumber: newUser.rollNumber
-        // });
         res.status(201).json({
             success: true,
             message: 'User registered successfully',
@@ -187,6 +294,152 @@ app.post('/api/signup', async (req, res) => {
     }
 });
 
+// Admin Routes
+app.post('/api/admin/login', async (req, res) => {
+    try {
+        const { adminID, password } = req.body;
+
+        if (!adminID || !password) {
+            return res.status(400).json({ message: 'Admin ID and password are required' });
+        }
+
+        const admin = await Admin.findOne({ adminID });
+        if (!admin) {
+            return res.status(401).json({ message: 'Invalid admin credentials' });
+        }
+
+        const isValidPassword = await bcrypt.compare(password, admin.password);
+        if (!isValidPassword) {
+            return res.status(401).json({ message: 'Invalid admin credentials' });
+        }
+
+        const token = jwt.sign({ adminID: admin.adminID }, JWT_SECRET, { expiresIn: '24h' });
+
+        res.json({
+            message: 'Login successful',
+            token,
+            adminID: admin.adminID
+        });
+    } catch (error) {
+        console.error('Admin login error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Get admin results
+app.get('/api/admin/results', authenticateToken, async (req, res) => {
+    try {
+        const results = await Result.find().populate('studentId', 'firstName lastName email');
+        res.json({ results });
+    } catch (error) {
+        console.error('Error fetching results:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Get admin questions
+app.get('/api/admin/questions', authenticateToken, async (req, res) => {
+    try {
+        const questions = await Question.find().sort({ createdAt: -1 });
+        res.json({ questions });
+    } catch (error) {
+        console.error('Error fetching questions:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Upload questions via CSV
+app.post('/api/admin/upload-questions', authenticateToken, upload.single('csvFile'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+
+        const questions = [];
+        const results = [];
+
+        fs.createReadStream(req.file.path)
+            .pipe(csv())
+            .on('data', (data) => {
+                const question = new Question({
+                    question: data.question,
+                    optionA: data.optionA || '',
+                    optionB: data.optionB || '',
+                    optionC: data.optionC || '',
+                    optionD: data.optionD || '',
+                    correctAnswer: data.correctAnswer || '',
+                    testType: data.testType
+                });
+                questions.push(question);
+            })
+            .on('end', async () => {
+                try {
+                    await Question.insertMany(questions);
+                    fs.unlinkSync(req.file.path); // Delete uploaded file
+                    res.json({ 
+                        message: 'Questions uploaded successfully', 
+                        count: questions.length 
+                    });
+                } catch (error) {
+                    console.error('Error saving questions:', error);
+                    res.status(500).json({ message: 'Error saving questions' });
+                }
+            });
+    } catch (error) {
+        console.error('Error uploading questions:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Get admin students
+app.get('/api/admin/students', authenticateToken, async (req, res) => {
+    try {
+        const students = await User.find().sort({ createdAt: -1 });
+        res.json({ students });
+    } catch (error) {
+        console.error('Error fetching students:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Send mail to all students
+app.post('/api/admin/send-mail', authenticateToken, async (req, res) => {
+    try {
+        const { subject, message } = req.body;
+
+        if (!subject || !message) {
+            return res.status(400).json({ message: 'Subject and message are required' });
+        }
+
+        const students = await User.find({}, 'email firstName lastName');
+        let sentCount = 0;
+
+        for (const student of students) {
+            try {
+                await transporter.sendMail({
+                    from: process.env.EMAIL_USER || 'your-email@gmail.com',
+                    to: student.email,
+                    subject: subject,
+                    text: `Dear ${student.firstName} ${student.lastName},\n\n${message}`,
+                    html: `<p>Dear ${student.firstName} ${student.lastName},</p><p>${message.replace(/\n/g, '<br>')}</p>`
+                });
+                sentCount++;
+            } catch (emailError) {
+                console.error(`Error sending email to ${student.email}:`, emailError);
+            }
+        }
+
+        res.json({ 
+            message: 'Emails sent successfully', 
+            sentCount,
+            totalStudents: students.length
+        });
+    } catch (error) {
+        console.error('Error sending emails:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 // Test endpoint to manually add a user
 app.post('/api/test-user', async (req, res) => {
     try {
@@ -195,7 +448,6 @@ app.post('/api/test-user', async (req, res) => {
             lastName: 'User',
             email: 'test@example.com',
             phone: '+1234567890',
-
             collegeName: 'Test College',
             branch: 'Test Branch',
             yearOfStudy: '1',
@@ -209,6 +461,29 @@ app.post('/api/test-user', async (req, res) => {
     } catch (error) {
         console.error('❌ Test user creation failed:', error);
         res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Create default admin account
+app.post('/api/admin/create-default', async (req, res) => {
+    try {
+        const existingAdmin = await Admin.findOne({ adminID: 'admin' });
+        if (existingAdmin) {
+            return res.json({ message: 'Default admin already exists' });
+        }
+
+        const hashedPassword = await bcrypt.hash('admin123', 10);
+        const admin = new Admin({
+            adminID: 'admin',
+            password: hashedPassword,
+            email: 'admin@example.com'
+        });
+
+        await admin.save();
+        res.json({ message: 'Default admin created successfully' });
+    } catch (error) {
+        console.error('Error creating default admin:', error);
+        res.status(500).json({ message: 'Internal server error' });
     }
 });
 

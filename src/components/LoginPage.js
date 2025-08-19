@@ -35,12 +35,44 @@ const LoginPage = () => {
     if (!validateForm()) return;
     setIsLoading(true);
 
-    setTimeout(() => {
-      console.log('Log in attempt:', formData);
-      setIsLoading(false);
-      // Navigate to dashboard after successful login
+    try {
+      // 1) Try hardcoded admin first (works even without backend)
+      const hardcodedAdmin = { adminID: 'admin123', password: 'securePass@123' };
+      if (formData.userId === hardcodedAdmin.adminID && formData.password === hardcodedAdmin.password) {
+        localStorage.setItem('adminToken', 'dummyToken123');
+        localStorage.setItem('adminID', formData.userId);
+        localStorage.setItem('role', 'admin');
+        navigate('/admin/dashboard');
+        return;
+      }
+
+      // 2) Try backend admin login
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ adminID: formData.userId, password: formData.password })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          localStorage.setItem('adminToken', data.token);
+          localStorage.setItem('adminID', data.adminID);
+          localStorage.setItem('role', 'admin');
+          navigate('/admin/dashboard');
+          return;
+        }
+      } catch (_) {
+        // Network issues: ignore and continue to student flow
+      }
+
+      // 3) Treat as student login (no backend student auth in project yet)
+      const user = { userId: formData.userId, remember: formData.remember };
+      localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('role', 'student');
       navigate('/dashboard');
-    }, 2000);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
