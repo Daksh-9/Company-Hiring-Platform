@@ -1,6 +1,6 @@
-# Hiring Platform - Admin Dashboard
+# Company Hiring Platform
 
-A comprehensive hiring platform with an admin dashboard built using React, Express/Node.js, and MongoDB.
+A comprehensive hiring platform with an admin dashboard built using React, Express/Node.js, MongoDB, and Tailwind CSS.
 
 ## Features
 
@@ -9,6 +9,7 @@ A comprehensive hiring platform with an admin dashboard built using React, Expre
 - **Results Analytics**: Interactive charts and graphs using Chart.js
 - **Test Questions Management**: CSV upload functionality for bulk question import
 - **Student Management**: View registered students and send bulk emails
+- **Full-screen Layout**: Persistent full-height layout using `h-screen`; main content scrolls via `overflow-y-auto`
 - **Responsive Design**: Modern UI with Tailwind CSS
 
 ### Student Features
@@ -30,7 +31,7 @@ A comprehensive hiring platform with an admin dashboard built using React, Expre
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd hiring-platform
+   cd Company-Hiring-Platform
    ```
 
 2. **Install dependencies**
@@ -74,12 +75,16 @@ A comprehensive hiring platform with an admin dashboard built using React, Expre
 ## Usage
 
 ### Admin Access
-1. Navigate to `/admin/login`
-2. Use the default credentials or create a new admin account
-3. Access the dashboard with three main sections:
-   - **Results**: View assessment analytics and charts
-   - **Test Questions**: Upload CSV files with questions
-   - **Students**: Manage registered students and send emails
+1. Navigate to `/admin/login` and sign in.
+2. After login, go to `/admin/dashboard`.
+3. Dashboard sections (nested routes):
+   - **Results**: index route at `/admin/dashboard`
+   - **Test Questions**: `/admin/dashboard/test-questions`
+   - **Students**: `/admin/dashboard/students`
+
+Layout notes:
+- The admin shell uses `h-screen` to fill the viewport and stays full-height across route changes.
+- The main content area uses `overflow-y-auto` for scrolling.
 
 ### CSV Upload Format
 For test questions, use this CSV format:
@@ -101,6 +106,7 @@ To enable bulk email functionality:
 
 ### Admin Routes
 - `POST /api/admin/login` - Admin authentication
+- `POST /api/admin/create-default` - Create the default admin (`admin` / `admin123`)
 - `GET /api/admin/results` - Get assessment results
 - `GET /api/admin/questions` - Get all questions
 - `POST /api/admin/upload-questions` - Upload questions via CSV
@@ -114,19 +120,23 @@ To enable bulk email functionality:
 ## Project Structure
 
 ```
-hiring-platform/
+Company-Hiring-Platform/
 ├── backend/
-│   └── server.js          # Express server with all routes
+│   └── server.js                 # Express server with all routes
 ├── src/
 │   ├── components/
-│   │   ├── AdminLogin.js      # Admin login component
-│   │   ├── AdminDashboard.js  # Main admin dashboard
-│   │   ├── AdminResults.js    # Results with charts
+│   │   ├── AdminDashboard.js     # Main admin dashboard shell
+│   │   ├── AdminResults.js       # Results
 │   │   ├── AdminTestQuestions.js # Question management
-│   │   ├── AdminStudents.js   # Student management
-│   │   └── ...                # Other existing components
-│   ├── App.js                 # Main app with routing
-│   └── index.css              # Styles with Tailwind
+│   │   ├── AdminStudents.js      # Student management
+│   │   ├── LandingPage.js        # Public landing page
+│   │   ├── LoginPage.js          # Login (used for admin and user)
+│   │   └── Dashboard.js          # Student dashboard
+│   ├── App.js                    # App routes
+│   ├── index.css                 # Global styles (Tailwind included)
+│   └── index.js
+├── public/
+│   └── index.html
 ├── package.json
 └── tailwind.config.js
 ```
@@ -143,9 +153,10 @@ hiring-platform/
 
 ### Adding New Features
 1. Create React components in `src/components/`
-2. Add routes in `src/App.js`
+2. Add routes in `src/App.js` (React Router v6)
 3. Create API endpoints in `backend/server.js`
 4. Update MongoDB schemas as needed
+5. Use Tailwind utility classes for consistent styling
 
 ### Database Schemas
 - **User**: Student registration data

@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, Routes, Route, useNavigate } from "react-router-dom";
+import { Link, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import MyProfile from "./MyProfile";
 import MCQTest from "./Assessments/MCQTest";
 import CodingTest from "./Assessments/CodingTest";
@@ -8,6 +8,8 @@ import Help from "./Help";
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isInAssessment = location.pathname.startsWith('/dashboard/assessments/');
 
   const handleLogout = () => {
     // Clear any stored user data
@@ -20,13 +22,14 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard-container">
-      {/* Persistent Navbar */}
-      <nav className="dashboard-navbar">
-        <div className="nav-left">
-          <Link to="/dashboard" className="logo">
-            <i className="fas fa-briefcase"></i> Embinsys
-          </Link>
-        </div>
+      {/* Persistent Navbar (hidden during assessments) */}
+      {!isInAssessment && (
+      <nav className="dashboard-navbar navbar-dark">
+      <div className="nav-left">
+        <Link to="/" className="logo brand">
+          <img src="/logo.png" alt="Embinsys" className="brand-logo" />
+        </Link>
+      </div>    
         <div className="nav-center">
           <h1>Student Dashboard</h1>
         </div>
@@ -52,6 +55,7 @@ const Dashboard = () => {
           </button>
         </div>
       </nav>
+      )}
 
       {/* Dashboard Content */}
       <div className="dashboard-content">
