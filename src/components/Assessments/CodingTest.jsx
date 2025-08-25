@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import useExamGuard from '../../utils/useExamGuard';
 
 const CodingTest = () => {
   const [currentProblem, setCurrentProblem] = useState(0);
@@ -6,6 +7,37 @@ const CodingTest = () => {
   const [timeLeft, setTimeLeft] = useState(2700); // 45 minutes in seconds
   const [isTestStarted, setIsTestStarted] = useState(false);
   const [isTestCompleted, setIsTestCompleted] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const timerRef = useRef(null);
+  useExamGuard({
+    enabled: isTestStarted && !isTestCompleted,
+    onFirstViolation: () => {
+      setIsPaused(true);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    },
+    onSecondViolation: () => {
+      handleSubmitTest();
+    },
+    onFocusReturn: () => {
+      if (isTestStarted && !isTestCompleted && isPaused && !timerRef.current) {
+        setIsPaused(false);
+        timerRef.current = setInterval(() => {
+          setTimeLeft(prev => {
+            if (prev <= 1) {
+              clearInterval(timerRef.current);
+              timerRef.current = null;
+              handleSubmitTest();
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      }
+    }
+  });
   const [selectedLanguage, setSelectedLanguage] = useState('javascript');
 
   const problems = [
@@ -94,10 +126,11 @@ const CodingTest = () => {
     setCode(problems[0].starterCode[selectedLanguage]);
     
     // Start timer
-    const timer = setInterval(() => {
+    timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
-          clearInterval(timer);
+          clearInterval(timerRef.current);
+          timerRef.current = null;
           handleSubmitTest();
           return 0;
         }
@@ -109,6 +142,11 @@ const CodingTest = () => {
   const handleSubmitTest = () => {
     setIsTestCompleted(true);
     setIsTestStarted(false);
+    setIsPaused(false);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
   };
 
   const handleNextProblem = () => {

@@ -4,9 +4,9 @@ import { Link } from 'react-router-dom';
 const LandingPage = () => {
   return (
     <div className="landing-container">
-      <nav className="navbar">
-        <Link to="/" className="logo">
-          <i className="fas fa-briefcase"></i> Embinsys
+      <nav className="navbar navbar-dark">
+        <Link to="/" className="logo brand">
+          <img src="/logo.png" alt="Embinsys" className="brand-logo" />
         </Link>
         <div className="nav-buttons">
           <Link to="/login" className="btn-nav">Log In</Link>
@@ -58,6 +58,25 @@ const LandingPage = () => {
           </div>
         </div>
       </section>
+
+      <footer className="landing-footer">
+        <div className="footer-inner">
+          <div className="footer-brand">
+            <Link to="/" className="logo brand">
+              <img src="/logo.png" alt="Embinsys" className="brand-logo" />
+            </Link>
+            <p>Empowering careers through better hiring.</p>
+          </div>
+          <div className="footer-links">
+            <Link to="/login">Login</Link>
+            <Link to="/register">Register</Link>
+            <a href="mailto:support@example.com">Support</a>
+          </div>
+          <div className="footer-copy">
+            <span>© {new Date().getFullYear()} Embinsys. All rights reserved.</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };

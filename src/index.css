@@ -402,11 +402,47 @@ select:focus {
   z-index: 1000;
 }
 
+/* Dark navbar theme */
+.navbar.navbar-dark {
+  background: #0f172a;
+  border-bottom-color: rgba(100, 116, 139, 0.25);
+}
+
+.navbar.navbar-dark .logo,
+.navbar.navbar-dark .logo.brand,
+.navbar.navbar-dark .brand-logo {
+  color: #f8fafc;
+}
+
+.navbar.navbar-dark .btn-nav {
+  border-color: #64748b;
+  color: #f8fafc;
+}
+
+.navbar.navbar-dark .btn-nav:hover {
+  background: rgba(100, 116, 139, 0.18);
+}
+
 .logo {
   color: white;
   font-size: 1.8rem;
   font-weight: 700;
   text-decoration: none;
+}
+
+/* Brand image with transparent background */
+.logo.brand {
+  display: inline-flex;
+  align-items: center;
+}
+
+.brand-logo {
+  height: 40px;
+  width: auto;
+  display: block;
+  object-fit: contain;
+  image-rendering: auto;
+  background: transparent;
 }
 
 .nav-buttons {
@@ -513,6 +549,50 @@ select:focus {
   text-align: center;
 }
 
+/* Landing footer */
+.landing-footer {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 30px 50px;
+}
+
+.landing-footer .footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 20px;
+  align-items: center;
+}
+
+.landing-footer .footer-brand p {
+  margin-top: 6px;
+  color: #94a3b8;
+  font-size: 0.95rem;
+}
+
+.landing-footer .footer-links {
+  display: flex;
+  gap: 16px;
+}
+
+.landing-footer .footer-links a {
+  color: #cbd5e1;
+  text-decoration: none;
+}
+
+.landing-footer .footer-links a:hover {
+  color: #ffffff;
+}
+
+.landing-footer .footer-copy {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  margin-top: 10px;
+}
+
 .features-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -553,7 +633,7 @@ select:focus {
 /* Dashboard styles */
 .dashboard-container {
   min-height: 100vh;
-  background: #f8f9fa;
+  background: #fff;
   width: 100vw;
   margin: 0;
   padding: 0;
@@ -570,6 +650,30 @@ select:focus {
   max-width: 1540px;
 }
 
+/* Dark theme for student dashboard navbar */
+.dashboard-navbar.navbar-dark {
+  background: #0f172a;
+  border-bottom-color: rgba(100, 116, 139, 0.25);
+}
+
+.dashboard-navbar.navbar-dark .nav-left .logo,
+.dashboard-navbar.navbar-dark .nav-center h1,
+.dashboard-navbar.navbar-dark .user-info,
+.dashboard-navbar.navbar-dark .user-info i {
+  color: #f8fafc;
+}
+
+.dashboard-navbar.navbar-dark .logout-btn {
+  background: transparent;
+  border: 1px solid #64748b;
+  color: #f8fafc;
+}
+
+.dashboard-navbar.navbar-dark .logout-btn:hover {
+  background: rgba(100, 116, 139, 0.18);
+  color: #f8fafc;
+}
+
 .nav-left .logo {
   color: #667eea;
   font-size: 1.5rem;
@@ -578,7 +682,7 @@ select:focus {
 }
 
 .nav-center h1 {
-  color: #333;
+  color: #fff;
   font-size: 1.8rem;
   font-weight: 600;
 }
@@ -593,7 +697,7 @@ select:focus {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #666;
+  color: #fff;
   font-size: 0.9rem;
 }
 
@@ -652,7 +756,7 @@ select:focus {
 }
 
 .test-card {
-  background: white;
+  background: #fff;
   border-radius: 15px;
   padding: 30px;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
@@ -742,7 +846,7 @@ select:focus {
 }
 
 .stat-card {
-  background: white;
+  background: #fff;
   border-radius: 12px;
   padding: 25px;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
@@ -885,8 +989,11 @@ select:focus {
   }
 
   .nav-right {
-    flex-direction: column;
-    gap: 10px;
+    display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   }
 
   .tests-grid {
