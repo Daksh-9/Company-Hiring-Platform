@@ -31,7 +31,7 @@ const AdminDashboard = () => {
   const isActive = (path) => location.pathname.includes(path);
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className="h-screen bg-gray-100 flex flex-col">
       {/* Navigation */}
       <nav className="bg-white shadow-lg w-full">
         <div className="px-4">
@@ -79,12 +79,12 @@ const AdminDashboard = () => {
         </div>
       </nav>
 
-      {/* Main Content - Full space */}
-      <main className="flex-1 w-full min-h-[calc(100vh-4rem)] p-0">
+      {/* Main Content - Scrollable */}
+      <main className="flex-1 w-full overflow-y-auto">
         <Routes>
-          <Route path="/" element={<AdminResults />} />
-          <Route path="/test-questions" element={<AdminTestQuestions />} />
-          <Route path="/students" element={<AdminStudents />} />
+          <Route index element={<AdminResults />} />
+          <Route path="test-questions" element={<AdminTestQuestions />} />
+          <Route path="students" element={<AdminStudents />} />
         </Routes>
       </main>
     </div>
