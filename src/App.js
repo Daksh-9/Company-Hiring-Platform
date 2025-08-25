@@ -10,7 +10,7 @@ import AdminDashboard from './components/AdminDashboard';
 function App() {
   return (
     <Router>
-      <div className="App">
+      <div className="App w-screen h-screen">
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
