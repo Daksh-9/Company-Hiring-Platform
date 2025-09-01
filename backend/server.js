@@ -1,3 +1,5 @@
+// backend/server.js
+
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
@@ -87,10 +89,21 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         required: true
     },
+    password: { // Add a password field for student login
+        type: String,
+        required: true
+    },
     createdAt: {
         type: Date,
         default: Date.now
     }
+});
+
+userSchema.pre('save', async function(next) {
+    if (this.isModified('password')) {
+        this.password = await bcrypt.hash(this.password, 10);
+    }
+    next();
 });
 
 const User = mongoose.model('User', userSchema);
@@ -262,6 +275,7 @@ app.post('/api/signup', async (req, res) => {
             branch,
             yearOfStudy,
             rollNumber,
+            password: 'Student@123', // Set a default password on signup
             terms: true
         });
 
@@ -291,6 +305,70 @@ app.post('/api/signup', async (req, res) => {
             success: false,
             message: 'Internal server error: ' + error.message
         });
+    }
+});
+
+// Student Login Route
+app.post('/api/user/login', async (req, res) => {
+    try {
+        const { userId, password } = req.body;
+
+        if (!userId || !password) {
+            return res.status(400).json({ message: 'User ID (email) and password are required' });
+        }
+
+        const user = await User.findOne({ email: userId });
+        if (!user) {
+            return res.status(401).json({ message: 'Invalid credentials' });
+        }
+
+        // Compare the provided password with the hashed password in the database
+        const isValidPassword = await bcrypt.compare(password, user.password);
+        if (!isValidPassword) {
+            return res.status(401).json({ message: 'Invalid credentials' });
+        }
+
+        const token = jwt.sign({ userId: user._id, email: user.email }, JWT_SECRET, { expiresIn: '24h' });
+
+        res.json({
+            message: 'Login successful',
+            token,
+            user: {
+                id: user._id,
+                email: user.email
+            }
+        });
+    } catch (error) {
+        console.error('User login error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Get Student Profile Route (Protected)
+app.get('/api/user/profile', authenticateToken, async (req, res) => {
+    try {
+        const userProfile = await User.findById(req.user.userId).select('-password');
+        if (!userProfile) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        res.json(userProfile);
+    } catch (error) {
+        console.error('Error fetching user profile:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Update Student Profile Route (Protected)
+app.put('/api/user/profile', authenticateToken, async (req, res) => {
+    try {
+        const updatedProfile = await User.findByIdAndUpdate(req.user.userId, req.body, { new: true, runValidators: true }).select('-password');
+        if (!updatedProfile) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        res.json({ message: 'Profile updated successfully', user: updatedProfile });
+    } catch (error) {
+        console.error('Error updating user profile:', error);
+        res.status(500).json({ message: 'Internal server error' });
     }
 });
 
@@ -452,6 +530,7 @@ app.post('/api/test-user', async (req, res) => {
             branch: 'Test Branch',
             yearOfStudy: '1',
             rollNumber: 'TST123',
+            password: 'testPassword123', // Add a password for the test user
             terms: true
         });
         
@@ -490,4 +569,4 @@ app.post('/api/admin/create-default', async (req, res) => {
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-}); 
+});
