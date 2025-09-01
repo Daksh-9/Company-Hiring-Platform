@@ -1,31 +1,73 @@
-import React, { useState } from 'react';
+// src/components/MyProfile.jsx
+
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const MyProfile = () => {
-  const [profile, setProfile] = useState({
-    firstName: 'John',
-    lastName: 'Doe',
-    email: 'john.doe@example.com',
-    phone: '+1 (555) 123-4567',
-    collegeName: 'Tech University',
-    branch: 'Computer Science',
-    yearOfStudy: '3',
-    rollNumber: 'CS2023001',
-    testsCompleted: 5,
-    averageScore: 85,
-    certificates: 2
-  });
-
+  const [profile, setProfile] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
-  const [editedProfile, setEditedProfile] = useState(profile);
+  const [editedProfile, setEditedProfile] = useState({});
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    const token = localStorage.getItem('userToken');
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+    
+    try {
+      const response = await fetch('/api/user/profile', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setProfile(data);
+        setEditedProfile(data);
+      } else {
+        setError('Failed to fetch profile data.');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleEdit = () => {
     setIsEditing(true);
-    setEditedProfile(profile);
   };
 
-  const handleSave = () => {
-    setProfile(editedProfile);
-    setIsEditing(false);
+  const handleSave = async () => {
+    const token = localStorage.getItem('userToken');
+    try {
+      const response = await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(editedProfile)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setProfile(data.user);
+        setIsEditing(false);
+      } else {
+        setError('Failed to update profile.');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+    }
   };
 
   const handleCancel = () => {
@@ -40,6 +82,14 @@ const MyProfile = () => {
       [name]: value
     }));
   };
+
+  if (loading) {
+    return <div className="text-center p-6">Loading profile...</div>;
+  }
+  
+  if (error) {
+    return <div className="text-center text-red-500 p-6">{error}</div>;
+  }
 
   return (
     <div className="profile-container">
@@ -85,6 +135,7 @@ const MyProfile = () => {
                     name="email"
                     value={editedProfile.email}
                     onChange={handleChange}
+                    disabled
                   />
                 </div>
                 
@@ -136,6 +187,7 @@ const MyProfile = () => {
                     name="rollNumber"
                     value={editedProfile.rollNumber}
                     onChange={handleChange}
+                    disabled
                   />
                 </div>
                 
@@ -194,7 +246,7 @@ const MyProfile = () => {
             </div>
             <div className="stat-info">
               <h4>Tests Completed</h4>
-              <span className="stat-number">{profile.testsCompleted}</span>
+              <span className="stat-number">{profile.testsCompleted || 0}</span>
             </div>
           </div>
           
@@ -204,7 +256,7 @@ const MyProfile = () => {
             </div>
             <div className="stat-info">
               <h4>Average Score</h4>
-              <span className="stat-number">{profile.averageScore}%</span>
+              <span className="stat-number">{profile.averageScore || '--'}%</span>
             </div>
           </div>
           
@@ -214,7 +266,7 @@ const MyProfile = () => {
             </div>
             <div className="stat-info">
               <h4>Certificates</h4>
-              <span className="stat-number">{profile.certificates}</span>
+              <span className="stat-number">{profile.certificates || 0}</span>
             </div>
           </div>
         </div>
@@ -224,4 +276,3 @@ const MyProfile = () => {
 };
 
 export default MyProfile;
-

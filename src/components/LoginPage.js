@@ -1,3 +1,5 @@
+// src/components/LoginPage.js
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -41,10 +43,26 @@ const LoginPage = () => {
     if (Object.keys(errs).length) return;
     setStudentLoading(true);
     try {
-      const user = { userId: studentForm.userId };
-      localStorage.setItem('user', JSON.stringify(user));
-      localStorage.setItem('role', 'student');
-      navigate('/dashboard');
+      const response = await fetch('/api/user/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: studentForm.userId,
+          password: studentForm.password
+        })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        localStorage.setItem('userToken', data.token); // Store student's JWT token
+        localStorage.setItem('userId', data.user.id); // Store student's ID
+        localStorage.setItem('role', 'student'); // Store user role
+        navigate('/dashboard');
+        return;
+      } else {
+        setStudentErrors({ password: data.message || 'Invalid credentials' });
+      }
+    } catch (error) {
+      setStudentErrors({ password: 'Network error. Please try again.' });
     } finally {
       setStudentLoading(false);
     }
