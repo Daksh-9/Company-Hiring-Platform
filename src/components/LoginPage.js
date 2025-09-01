@@ -74,35 +74,27 @@ const LoginPage = () => {
     setAdminErrors(errs);
     if (Object.keys(errs).length) return;
     setAdminLoading(true);
+  
     try {
-      const hardcodedAdmin = { adminID: 'admin123', password: 'securePass@123' };
-      if (adminForm.userId === hardcodedAdmin.adminID && adminForm.password === hardcodedAdmin.password) {
-        localStorage.setItem('adminToken', 'dummyToken123');
-        localStorage.setItem('adminID', adminForm.userId);
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminID: adminForm.userId, password: adminForm.password })
+      });
+      const data = await res.json();
+  
+      if (res.ok) {
+        localStorage.setItem('adminToken', data.token); // Correctly save the token
+        localStorage.setItem('adminID', data.adminID);
         localStorage.setItem('role', 'admin');
         navigate('/admin/dashboard');
         return;
+      } else {
+        setAdminErrors({ password: data.message || 'Invalid credentials' });
       }
-
-      try {
-        const res = await fetch('/api/admin/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ adminID: adminForm.userId, password: adminForm.password })
-        });
-        const data = await res.json();
-        if (res.ok) {
-          localStorage.setItem('adminToken', data.token);
-          localStorage.setItem('adminID', data.adminID);
-          localStorage.setItem('role', 'admin');
-          navigate('/admin/dashboard');
-          return;
-        } else {
-          setAdminErrors({ password: data.message || 'Invalid credentials' });
-        }
-      } catch (_) {
-        setAdminErrors({ password: 'Network error. Please try again.' });
-      }
+    } catch (error) {
+      console.error('Admin login network error:', error);
+      setAdminErrors({ password: 'Network error. Please try again.' });
     } finally {
       setAdminLoading(false);
     }
