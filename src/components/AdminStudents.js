@@ -1,3 +1,5 @@
+// src/components/AdminStudents.js
+
 import React, { useState, useEffect } from 'react';
 
 const AdminStudents = () => {
@@ -339,8 +341,8 @@ const AdminStudents = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {students.map((student, index) => (
-                  <tr key={index} className="hover:bg-gray-50">
+                {students.map((student) => (
+                  <tr key={student._id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
                         {student.firstName} {student.lastName}
@@ -364,8 +366,8 @@ const AdminStudents = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">{student.rollNumber || 'N/A'}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(student.createdAt).toLocaleDateString()}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                      {student.createdAt && <span role="img" aria-label="registered">✅</span>}
                     </td>
                   </tr>
                 ))}
