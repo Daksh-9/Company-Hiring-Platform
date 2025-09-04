@@ -8,6 +8,7 @@ const CodingTest = () => {
   const [isTestStarted, setIsTestStarted] = useState(false);
   const [isTestCompleted, setIsTestCompleted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [skippedProblems, setSkippedProblems] = useState(new Set());
   const timerRef = useRef(null);
   useExamGuard({
     enabled: isTestStarted && !isTestCompleted,
@@ -163,6 +164,14 @@ const CodingTest = () => {
     }
   };
 
+  const handleSkipProblem = () => {
+    setSkippedProblems(prev => new Set(prev).add(currentProblem));
+    if (currentProblem < problems.length - 1) {
+      setCurrentProblem(currentProblem + 1);
+      setCode(problems[currentProblem + 1].starterCode[selectedLanguage]);
+    }
+  };
+
   const handleLanguageChange = (language) => {
     setSelectedLanguage(language);
     setCode(problems[currentProblem].starterCode[language]);
@@ -239,34 +248,68 @@ const CodingTest = () => {
   const currentP = problems[currentProblem];
 
   return (
-    <div className="coding-test-container">
-      <div className="test-header">
-        <div className="test-progress">
-          <span>Problem {currentProblem + 1} of {problems.length}</span>
-          <div className="progress-bar">
-            <div 
-              className="progress-fill" 
-              style={{ width: `${((currentProblem + 1) / problems.length) * 100}%` }}
-            ></div>
+    <div className="w-full h-full flex">
+      {/* Sidebar ~20% */}
+      <aside className="hidden md:block w-1/5 border-r bg-white">
+        <div className="p-4 border-b flex items-center justify-between">
+          <span className="font-semibold">Problems</span>
+          <span className="text-sm text-gray-500">{currentProblem + 1}/{problems.length}</span>
+        </div>
+        <div className="p-4 grid grid-cols-5 gap-2">
+          {problems.map((p, index) => {
+            const isSkipped = skippedProblems.has(index);
+            const base = 'w-10 h-10 rounded border text-sm flex items-center justify-center';
+            const color = isSkipped
+              ? 'bg-gray-300 text-gray-700 border-gray-300'
+              : 'bg-white text-gray-900 border-gray-300';
+            const active = currentProblem === index ? 'ring-2 ring-indigo-500' : '';
+            return (
+              <button
+                key={p.id}
+                className={`${base} ${color} ${active}`}
+                onClick={() => {
+                  setCurrentProblem(index);
+                  setCode(problems[index].starterCode[selectedLanguage]);
+                }}
+                title={`Problem ${index + 1}`}
+              >
+                {index + 1}
+              </button>
+            );
+          })}
+        </div>
+        <div className="px-4 pb-4 text-xs text-gray-600 space-y-1">
+          <div className="flex items-center gap-2"><span className="w-3 h-3 bg-white border border-gray-300 rounded-sm"></span> Unattempted</div>
+          <div className="flex items-center gap-2"><span className="w-3 h-3 bg-gray-300 rounded-sm"></span> Skipped</div>
+        </div>
+      </aside>
+
+      {/* Main ~80% */}
+      <main className="flex-1 flex flex-col">
+        <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
+          <div className="w-full max-w-md">
+            <span>Problem {currentProblem + 1} of {problems.length}</span>
+            <div className="progress-bar">
+              <div 
+                className="progress-fill" 
+                style={{ width: `${((currentProblem + 1) / problems.length) * 100}%` }}
+              ></div>
+            </div>
+          </div>
+          <div className="ml-4">
+            <i className="fas fa-clock"></i>
+            <span className="ml-1">{formatTime(timeLeft)}</span>
           </div>
         </div>
-        <div className="test-timer">
-          <i className="fas fa-clock"></i>
-          <span>{formatTime(timeLeft)}</span>
-        </div>
-      </div>
 
-      <div className="coding-layout">
-        <div className="problem-panel">
+        <div className="flex-1 p-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="problem-card">
-            <h3 className="problem-title">{currentP.title}</h3>
-            <p className="problem-description">{currentP.description}</p>
-            
+            <h3 className="problem-title text-center lg:text-left">{currentP.title}</h3>
+            <p className="problem-description text-center lg:text-left">{currentP.description}</p>
             <div className="problem-example">
               <h4>Example:</h4>
               <pre>{currentP.example}</pre>
             </div>
-            
             <div className="test-cases">
               <h4>Test Cases:</h4>
               {currentP.testCases.map((testCase, index) => (
@@ -277,82 +320,67 @@ const CodingTest = () => {
               ))}
             </div>
           </div>
-        </div>
 
-        <div className="code-panel">
-          <div className="code-header">
-            <div className="language-selector">
-              <label>Language:</label>
-              <select 
-                value={selectedLanguage} 
-                onChange={(e) => handleLanguageChange(e.target.value)}
-              >
-                <option value="javascript">JavaScript</option>
-                <option value="python">Python</option>
-                <option value="java">Java</option>
-              </select>
+          <div className="code-panel">
+            <div className="code-header">
+              <div className="language-selector">
+                <label>Language:</label>
+                <select 
+                  value={selectedLanguage} 
+                  onChange={(e) => handleLanguageChange(e.target.value)}
+                >
+                  <option value="javascript">JavaScript</option>
+                  <option value="python">Python</option>
+                  <option value="java">Java</option>
+                </select>
+              </div>
+              <button className="btn btn-secondary">
+                <i className="fas fa-play"></i>
+                Run Code
+              </button>
             </div>
-            <button className="btn btn-secondary">
-              <i className="fas fa-play"></i>
-              Run Code
-            </button>
-          </div>
-          
-          <div className="code-editor">
-            <textarea
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="Write your code here..."
-              className="code-textarea"
-            />
-          </div>
-          
-          <div className="output-panel">
-            <h4>Output:</h4>
-            <div className="output-content">
-              <p>Click "Run Code" to test your solution</p>
+            <div className="code-editor">
+              <textarea
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="Write your code here..."
+                className="code-textarea"
+              />
+            </div>
+            <div className="output-panel">
+              <h4>Output:</h4>
+              <div className="output-content">
+                <p>Click "Run Code" to test your solution</p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="test-navigation">
-        <button 
-          className="btn btn-secondary" 
-          onClick={handlePreviousProblem}
-          disabled={currentProblem === 0}
-        >
-          <i className="fas fa-arrow-left"></i>
-          Previous
-        </button>
-        
-        <div className="problem-indicators">
-          {problems.map((_, index) => (
-            <button
-              key={index}
-              className={`indicator ${currentProblem === index ? 'active' : ''}`}
-              onClick={() => {
-                setCurrentProblem(index);
-                setCode(problems[index].starterCode[selectedLanguage]);
-              }}
-            >
-              {index + 1}
-            </button>
-          ))}
+        <div className="px-4 py-3 border-t flex items-center justify-between bg-white">
+          <button 
+            className="btn btn-secondary" 
+            onClick={handlePreviousProblem}
+            disabled={currentProblem === 0}
+          >
+            <i className="fas fa-arrow-left"></i>
+            Previous
+          </button>
+          <div className="flex items-center gap-2">
+            <button className="btn btn-secondary" onClick={handleSkipProblem}>Skip</button>
+            {currentProblem === problems.length - 1 ? (
+              <button className="btn btn-primary" onClick={handleSubmitTest}>
+                <i className="fas fa-check"></i>
+                Submit Test
+              </button>
+            ) : (
+              <button className="btn btn-primary" onClick={handleNextProblem}>
+                Next
+                <i className="fas fa-arrow-right"></i>
+              </button>
+            )}
+          </div>
         </div>
-
-        {currentProblem === problems.length - 1 ? (
-          <button className="btn btn-primary" onClick={handleSubmitTest}>
-            <i className="fas fa-check"></i>
-            Submit Test
-          </button>
-        ) : (
-          <button className="btn btn-primary" onClick={handleNextProblem}>
-            Next
-            <i className="fas fa-arrow-right"></i>
-          </button>
-        )}
-      </div>
+      </main>
     </div>
   );
 };

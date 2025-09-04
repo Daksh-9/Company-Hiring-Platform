@@ -210,12 +210,22 @@ const authenticateToken = (req, res, next) => {
 // Multer configuration for file uploads
 const upload = multer({ dest: 'uploads/' });
 
-// Email transporter
+// Email transporter (Gmail)
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: process.env.EMAIL_USER || 'your-email@gmail.com',
-        pass: process.env.EMAIL_PASS || 'your-app-password'
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    }
+});
+
+// Verify transporter configuration at startup for clearer diagnostics
+transporter.verify((error, success) => {
+    if (error) {
+        console.error('❌ SMTP configuration error:', error.message);
+        console.error('💡 Ensure EMAIL_USER and EMAIL_PASS (App Password) are set in .env');
+    } else {
+        console.log('✅ SMTP transporter is ready to send emails');
     }
 });
 
@@ -483,21 +493,39 @@ app.get('/api/admin/students', authenticateToken, async (req, res) => {
 // Send mail to all students
 app.post('/api/admin/send-mail', authenticateToken, async (req, res) => {
     try {
-        const { subject, message } = req.body;
+        const { subject, message, to } = req.body;
 
         if (!subject || !message) {
-            return res.status(400).json({ message: 'Subject and message are required' });
+            return res.status(400).json({ success: false, message: 'Subject and message are required' });
         }
 
+        // If a specific recipient is provided, send a single email
+        if (to) {
+            try {
+                await transporter.sendMail({
+                    from: process.env.EMAIL_USER,
+                    to,
+                    subject,
+                    text: message,
+                    html: `<p>${String(message).replace(/\n/g, '<br>')}</p>`
+                });
+                return res.json({ success: true, sentCount: 1 });
+            } catch (err) {
+                console.error(`Error sending email to ${to}:`, err);
+                return res.status(500).json({ success: false, message: 'Failed to send email' });
+            }
+        }
+
+        // Otherwise, send to all students
         const students = await User.find({}, 'email firstName lastName');
         let sentCount = 0;
 
         for (const student of students) {
             try {
                 await transporter.sendMail({
-                    from: process.env.EMAIL_USER || 'your-email@gmail.com',
+                    from: process.env.EMAIL_USER,
                     to: student.email,
-                    subject: subject,
+                    subject,
                     text: `Dear ${student.firstName} ${student.lastName},\n\n${message}`,
                     html: `<p>Dear ${student.firstName} ${student.lastName},</p><p>${message.replace(/\n/g, '<br>')}</p>`
                 });
@@ -507,14 +535,10 @@ app.post('/api/admin/send-mail', authenticateToken, async (req, res) => {
             }
         }
 
-        res.json({ 
-            message: 'Emails sent successfully', 
-            sentCount,
-            totalStudents: students.length
-        });
+        return res.json({ success: true, sentCount });
     } catch (error) {
         console.error('Error sending emails:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        return res.status(500).json({ success: false, message: 'Internal server error' });
     }
 });
 
