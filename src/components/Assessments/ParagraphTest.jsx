@@ -8,6 +8,7 @@ const ParagraphTest = () => {
   const [isTestStarted, setIsTestStarted] = useState(false);
   const [isTestCompleted, setIsTestCompleted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [skippedPrompts, setSkippedPrompts] = useState(new Set());
   const timerRef = useRef(null);
 
   useExamGuard({
@@ -117,6 +118,13 @@ const ParagraphTest = () => {
     }
   };
 
+  const handleSkipPrompt = () => {
+    setSkippedPrompts(prev => new Set(prev).add(currentPrompt));
+    if (currentPrompt < prompts.length - 1) {
+      setCurrentPrompt(currentPrompt + 1);
+    }
+  };
+
   const formatTime = (seconds) => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
@@ -201,29 +209,65 @@ const ParagraphTest = () => {
   const currentP = getCurrentPrompt();
 
   return (
-    <div className="paragraph-test-container">
-      <div className="test-header">
-        <div className="test-progress">
-          <span>Prompt {currentPrompt + 1} of {prompts.length}</span>
-          <div className="progress-bar">
-            <div 
-              className="progress-fill" 
-              style={{ width: `${((currentPrompt + 1) / prompts.length) * 100}%` }}
-            ></div>
+    <div className="w-full h-full flex">
+      {/* Sidebar ~20% */}
+      <aside className="hidden md:block w-1/5 border-r bg-white">
+        <div className="p-4 border-b flex items-center justify-between">
+          <span className="font-semibold">Prompts</span>
+          <span className="text-sm text-gray-500">{currentPrompt + 1}/{prompts.length}</span>
+        </div>
+        <div className="p-4 grid grid-cols-5 gap-2">
+          {prompts.map((p, index) => {
+            const hasAnswer = !!paragraphs[p.id]?.length;
+            const isSkipped = skippedPrompts.has(index);
+            const base = 'w-10 h-10 rounded border text-sm flex items-center justify-center';
+            const color = hasAnswer
+              ? 'bg-green-500 text-white border-green-500'
+              : isSkipped
+                ? 'bg-gray-300 text-gray-700 border-gray-300'
+                : 'bg-white text-gray-900 border-gray-300';
+            const active = currentPrompt === index ? 'ring-2 ring-indigo-500' : '';
+            return (
+              <button
+                key={p.id}
+                className={`${base} ${color} ${active}`}
+                onClick={() => setCurrentPrompt(index)}
+                title={`Prompt ${index + 1}`}
+              >
+                {index + 1}
+              </button>
+            );
+          })}
+        </div>
+        <div className="px-4 pb-4 text-xs text-gray-600 space-y-1">
+          <div className="flex items-center gap-2"><span className="w-3 h-3 bg-green-500 rounded-sm"></span> Answered</div>
+          <div className="flex items-center gap-2"><span className="w-3 h-3 bg-white border border-gray-300 rounded-sm"></span> Unanswered</div>
+          <div className="flex items-center gap-2"><span className="w-3 h-3 bg-gray-300 rounded-sm"></span> Skipped</div>
+        </div>
+      </aside>
+
+      {/* Main ~80% */}
+      <main className="flex-1 flex flex-col">
+        <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
+          <div className="w-full max-w-md">
+            <span>Prompt {currentPrompt + 1} of {prompts.length}</span>
+            <div className="progress-bar">
+              <div 
+                className="progress-fill" 
+                style={{ width: `${((currentPrompt + 1) / prompts.length) * 100}%` }}
+              ></div>
+            </div>
+          </div>
+          <div className="ml-4">
+            <i className="fas fa-clock"></i>
+            <span className="ml-1">{formatTime(timeLeft)}</span>
           </div>
         </div>
-        <div className="test-timer">
-          <i className="fas fa-clock"></i>
-          <span>{formatTime(timeLeft)}</span>
-        </div>
-      </div>
 
-      <div className="writing-layout">
-        <div className="prompt-panel">
+        <div className="flex-1 p-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="prompt-card">
-            <h3 className="prompt-title">{currentP.title}</h3>
-            <p className="prompt-description">{currentP.description}</p>
-            
+            <h3 className="prompt-title text-center lg:text-left">{currentP.title}</h3>
+            <p className="prompt-description text-center lg:text-left">{currentP.description}</p>
             <div className="prompt-requirements">
               <div className="requirement-item">
                 <i className="fas fa-file-alt"></i>
@@ -234,7 +278,6 @@ const ParagraphTest = () => {
                 <span>Time Limit: {currentP.timeLimit} minutes</span>
               </div>
             </div>
-            
             <div className="writing-tips">
               <h4>Writing Tips:</h4>
               <ul>
@@ -246,92 +289,80 @@ const ParagraphTest = () => {
               </ul>
             </div>
           </div>
-        </div>
 
-        <div className="writing-panel">
-          <div className="writing-header">
-            <div className="word-counter">
-              <span>Words: {wordCount}/{currentP.wordLimit}</span>
-              <div className="word-progress">
-                <div 
-                  className="word-progress-fill" 
-                  style={{ 
-                    width: `${Math.min((wordCount / currentP.wordLimit) * 100, 100)}%`,
-                    backgroundColor: wordCount > currentP.wordLimit ? '#e74c3c' : '#667eea'
-                  }}
-                ></div>
+          <div className="writing-panel">
+            <div className="writing-header">
+              <div className="word-counter">
+                <span>Words: {wordCount}/{currentP.wordLimit}</span>
+                <div className="word-progress">
+                  <div 
+                    className="word-progress-fill" 
+                    style={{ 
+                      width: `${Math.min((wordCount / currentP.wordLimit) * 100, 100)}%`,
+                      backgroundColor: wordCount > currentP.wordLimit ? '#e74c3c' : '#667eea'
+                    }}
+                  ></div>
+                </div>
+              </div>
+              <div className="writing-tools">
+                <button className="tool-btn" title="Bold">
+                  <i className="fas fa-bold"></i>
+                </button>
+                <button className="tool-btn" title="Italic">
+                  <i className="fas fa-italic"></i>
+                </button>
+                <button className="tool-btn" title="Underline">
+                  <i className="fas fa-underline"></i>
+                </button>
               </div>
             </div>
-            <div className="writing-tools">
-              <button className="tool-btn" title="Bold">
-                <i className="fas fa-bold"></i>
-              </button>
-              <button className="tool-btn" title="Italic">
-                <i className="fas fa-italic"></i>
-              </button>
-              <button className="tool-btn" title="Underline">
-                <i className="fas fa-underline"></i>
-              </button>
+            <div className="writing-editor">
+              <textarea
+                value={currentParagraph}
+                onChange={(e) => handleParagraphChange(currentP.id, e.target.value)}
+                placeholder="Start writing your paragraph here..."
+                className="paragraph-textarea"
+                rows={12}
+              />
             </div>
-          </div>
-          
-          <div className="writing-editor">
-            <textarea
-              value={currentParagraph}
-              onChange={(e) => handleParagraphChange(currentP.id, e.target.value)}
-              placeholder="Start writing your paragraph here..."
-              className="paragraph-textarea"
-              rows={12}
-            />
-          </div>
-          
-          <div className="writing-stats">
-            <div className="stat-item">
-              <i className="fas fa-file-alt"></i>
-              <span>Characters: {currentParagraph.length}</span>
-            </div>
-            <div className="stat-item">
-              <i className="fas fa-clock"></i>
-              <span>Time Remaining: {formatTime(timeLeft)}</span>
+            <div className="writing-stats">
+              <div className="stat-item">
+                <i className="fas fa-file-alt"></i>
+                <span>Characters: {currentParagraph.length}</span>
+              </div>
+              <div className="stat-item">
+                <i className="fas fa-clock"></i>
+                <span>Time Remaining: {formatTime(timeLeft)}</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="test-navigation">
-        <button 
-          className="btn btn-secondary" 
-          onClick={handlePreviousPrompt}
-          disabled={currentPrompt === 0}
-        >
-          <i className="fas fa-arrow-left"></i>
-          Previous
-        </button>
-        
-        <div className="prompt-indicators">
-          {prompts.map((_, index) => (
-            <button
-              key={index}
-              className={`indicator ${currentPrompt === index ? 'active' : ''} ${paragraphs[prompts[index].id] ? 'completed' : ''}`}
-              onClick={() => setCurrentPrompt(index)}
-            >
-              {index + 1}
-            </button>
-          ))}
+        <div className="px-4 py-3 border-t flex items-center justify-between bg-white">
+          <button 
+            className="btn btn-secondary" 
+            onClick={handlePreviousPrompt}
+            disabled={currentPrompt === 0}
+          >
+            <i className="fas fa-arrow-left"></i>
+            Previous
+          </button>
+          <div className="flex items-center gap-2">
+            <button className="btn btn-secondary" onClick={handleSkipPrompt}>Skip</button>
+            {currentPrompt === prompts.length - 1 ? (
+              <button className="btn btn-primary" onClick={handleSubmitTest}>
+                <i className="fas fa-check"></i>
+                Submit Test
+              </button>
+            ) : (
+              <button className="btn btn-primary" onClick={handleNextPrompt}>
+                Next
+                <i className="fas fa-arrow-right"></i>
+              </button>
+            )}
+          </div>
         </div>
-
-        {currentPrompt === prompts.length - 1 ? (
-          <button className="btn btn-primary" onClick={handleSubmitTest}>
-            <i className="fas fa-check"></i>
-            Submit Test
-          </button>
-        ) : (
-          <button className="btn btn-primary" onClick={handleNextPrompt}>
-            Next
-            <i className="fas fa-arrow-right"></i>
-          </button>
-        )}
-      </div>
+      </main>
     </div>
   );
 };
