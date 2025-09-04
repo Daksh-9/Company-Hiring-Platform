@@ -1,47 +1,106 @@
 # Company Hiring Platform
 
-A comprehensive hiring platform with an admin dashboard built using React, Express/Node.js, MongoDB, and Tailwind CSS.
+# Company Hiring Platform
+
+A comprehensive full-stack hiring and student assessment platform with a modern admin dashboard, built using React.js, Express/Node.js, MongoDB, and Tailwind CSS. This platform enables secure user registration, multiple test types, real-time assessment tracking, and detailed analytics through an admin interface.
+
+***
+
+## Table of Contents
+- [Project Overview](#project-overview)
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Installation & Setup](#installation--setup)
+- [Usage](#usage)
+- [Security Features](#security-features)
+- [API Endpoints](#api-endpoints)
+- [Adding New Features](#adding-new-features)
+- [Database Schemas](#database-schemas)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
+
+***
+
+## Project Overview
+
+The Company Hiring Platform is designed to streamline the recruitment and assessment process for undergraduate students. It offers a user-friendly interface for students to register and complete various assessments including multiple choice questions (MCQ), coding tests, and paragraph answers. An extensive admin dashboard provides secure authentication and powerful tools to manage questions, students, and to view detailed test analytics with interactive charts.
+
+The platform uses JWT for secure authentication, supports bulk question uploads through CSV files, and integrates email functionality for communicating with students.
+
+***
 
 ## Features
 
 ### Admin Dashboard
-- **Secure Login**: Admin authentication with JWT tokens
-- **Results Analytics**: Interactive charts and graphs using Chart.js
-- **Test Questions Management**: CSV upload functionality for bulk question import
-- **Student Management**: View registered students and send bulk emails
-- **Full-screen Layout**: Persistent full-height layout using `h-screen`; main content scrolls via `overflow-y-auto`
-- **Responsive Design**: Modern UI with Tailwind CSS
+- Secure login with JWT authentication
+- Results analytics with interactive charts via Chart.js
+- Test questions management including bulk CSV upload
+- Student management with registration overview and bulk email capabilities
+- Responsive, full-screen layout using Tailwind CSS
 
-### Student Features
+### Student Portal
 - User registration and authentication
-- Multiple test types (MCQ, Coding, Paragraph)
-- Real-time assessment tracking
+- Multiple assessment types: MCQ, coding, and paragraph
+- Real-time test progress and score tracking
+
+***
 
 ## Tech Stack
 
-- **Frontend**: React.js, React Router, Chart.js, Tailwind CSS
-- **Backend**: Node.js, Express.js
-- **Database**: MongoDB with Mongoose
-- **Authentication**: JWT (JSON Web Tokens)
-- **File Upload**: Multer for CSV processing
-- **Email**: Nodemailer for bulk email functionality
+| Layer        | Technologies                          |
+|--------------|------------------------------------|
+| Frontend     | React.js, React Router DOM, Tailwind CSS, Chart.js |
+| Backend      | Node.js, Express.js                  |
+| Database     | MongoDB with Mongoose                |
+| Authentication | JWT (JSON Web Tokens), bcrypt for password hashing |
+| File Upload  | Multer for handling CSV uploads     |
+| Email        | Nodemailer for bulk email            |
 
-## Installation
+***
+
+## Project Structure
+
+```
+Company-Hiring-Platform/
+├── backend/
+│   └── server.js              # Express server with API routes and middleware
+├── src/
+│   ├── components/            # React components for UI
+│   │   ├── AdminDashboard.js    # Main admin dashboard shell
+│   │   ├── AdminResults.js      # Results analytics dashboard
+│   │   ├── AdminTestQuestions.js # Question management panel
+│   │   ├── AdminStudents.js     # Student list and management dashboard
+│   │   ├── LandingPage.js       # Public landing page
+│   │   ├── LoginPage.js         # Login page for users and admins
+│   │   └── Dashboard.js         # Student dashboard for assessments
+│   ├── App.js                 # App routing setup
+│   ├── index.css              # Global styles including Tailwind CSS
+│   └── index.js               # React app entrypoint
+├── public/
+│   └── index.html             # Static HTML entrypoint
+├── package.json               # Project dependencies and scripts
+└── tailwind.config.js         # Tailwind CSS configuration
+```
+
+***
+
+## Installation & Setup
 
 1. **Clone the repository**
-   ```bash
+   ```
    git clone <repository-url>
    cd Company-Hiring-Platform
    ```
 
 2. **Install dependencies**
-   ```bash
+   ```
    npm install
    ```
 
-3. **Environment Setup**
-   Create a `.env` file in the root directory:
-   ```env
+3. **Create `.env` file** in the root directory with these environment variables:
+   ```
    MONGODB_URI=mongodb+srv://your-username:your-password@cluster0.sx83e.mongodb.net/hiring_platform
    JWT_SECRET=your-secret-key-here
    EMAIL_USER=your-email@gmail.com
@@ -50,139 +109,125 @@ A comprehensive hiring platform with an admin dashboard built using React, Expre
    ```
 
 4. **Create Default Admin Account**
-   ```bash
-   # Start the server first
-   npm run server
-   
-   # In another terminal, create the default admin
-   curl -X POST http://localhost:5001/api/admin/create-default
-   ```
-   
-   Default admin credentials:
-   - Admin ID: `admin`
-   - Password: `admin123`
+   - Start the backend server:
+     ```
+     npm run server
+     ```
+   - In another terminal, create default admin user:
+     ```
+     curl -X POST http://localhost:5001/api/admin/create-default
+     ```
+   - Default admin credentials:
+     - Admin ID: `admin`
+     - Password: `admin123`
 
 5. **Start the application**
-   ```bash
-   # Development mode (both frontend and backend)
-   npm run dev
-   
-   # Or start separately
-   npm run server  # Backend only
-   npm start       # Frontend only
-   ```
+   - Run both frontend and backend concurrently:
+     ```
+     npm run dev
+     ```
+   - Or run separately:
+     ```
+     npm run server    # Backend only
+     npm start         # Frontend only
+     ```
+
+***
 
 ## Usage
 
-### Admin Access
-1. Navigate to `/admin/login` and sign in.
-2. After login, go to `/admin/dashboard`.
-3. Dashboard sections (nested routes):
-   - **Results**: index route at `/admin/dashboard`
-   - **Test Questions**: `/admin/dashboard/test-questions`
-   - **Students**: `/admin/dashboard/students`
+- Admin Login: Navigate to `/admin/login` and enter the credentials.
+- Admin Dashboard Sections:
+  - Results overview: `/admin/dashboard`
+  - Manage Test Questions: `/admin/dashboard/test-questions`
+  - Manage Students: `/admin/dashboard/students`
+- Student Registration and Login: Accessible via public landing page and login routes.
+- Students can attempt various tests, and their scores are tracked in real time.
 
-Layout notes:
-- The admin shell uses `h-screen` to fill the viewport and stays full-height across route changes.
-- The main content area uses `overflow-y-auto` for scrolling.
+***
 
-### CSV Upload Format
-For test questions, use this CSV format:
-```csv
-question,optionA,optionB,optionC,optionD,correctAnswer,testType
-"What is the capital of France?","Paris","London","Berlin","Madrid","A","MCQ"
-"Write a function to reverse a string","","","","","","Coding"
-"Explain the concept of recursion","","","","","","Paragraph"
-```
+## Security Features
 
-### Email Configuration
-To enable bulk email functionality:
-1. Use a Gmail account
-2. Enable 2-factor authentication
-3. Generate an App Password
-4. Update the `.env` file with your credentials
+- Passwords are securely hashed using bcrypt before database storage.
+- JWT-based authentication protects both user and admin routes.
+- Server-side input validations prevent malformed or malicious data.
+- File upload endpoints restrict allowed file types and sizes.
+- Session tokens are securely managed and expiration handled.
+- Anti-cheating mechanisms included in assessment modules (detailed in code).
+
+***
 
 ## API Endpoints
 
 ### Admin Routes
 - `POST /api/admin/login` - Admin authentication
-- `POST /api/admin/create-default` - Create the default admin (`admin` / `admin123`)
-- `GET /api/admin/results` - Get assessment results
-- `GET /api/admin/questions` - Get all questions
-- `POST /api/admin/upload-questions` - Upload questions via CSV
-- `GET /api/admin/students` - Get all registered students
+- `POST /api/admin/create-default` - Create default admin user
+- `GET /api/admin/results` - Fetch assessment results
+- `GET /api/admin/questions` - Retrieve all questions
+- `POST /api/admin/upload-questions` - Upload bulk questions via CSV
+- `GET /api/admin/students` - List all registered students
 - `POST /api/admin/send-mail` - Send bulk emails to students
 
 ### User Routes
 - `POST /api/signup` - User registration
-- `POST /api/test-user` - Create test user (development)
+- `POST /api/user/login` - User login
+- `GET /api/user/profile` - Fetch authenticated user profile
+- `PUT /api/user/profile` - Update user profile
 
-## Project Structure
+***
 
-```
-Company-Hiring-Platform/
-├── backend/
-│   └── server.js                 # Express server with all routes
-├── src/
-│   ├── components/
-│   │   ├── AdminDashboard.js     # Main admin dashboard shell
-│   │   ├── AdminResults.js       # Results
-│   │   ├── AdminTestQuestions.js # Question management
-│   │   ├── AdminStudents.js      # Student management
-│   │   ├── LandingPage.js        # Public landing page
-│   │   ├── LoginPage.js          # Login (used for admin and user)
-│   │   └── Dashboard.js          # Student dashboard
-│   ├── App.js                    # App routes
-│   ├── index.css                 # Global styles (Tailwind included)
-│   └── index.js
-├── public/
-│   └── index.html
-├── package.json
-└── tailwind.config.js
-```
+## Adding New Features
 
-## Security Features
+To extend the platform:
+1. Create or update React components inside `src/components/`.
+2. Add or modify application routes in `src/App.js` using React Router.
+3. Implement new backend API endpoints or update existing ones in `backend/server.js`.
+4. Adjust or create new MongoDB schemas as required.
+5. Use Tailwind CSS utility classes for consistent styling.
 
-- **Password Hashing**: All passwords are hashed using bcrypt
-- **JWT Authentication**: Secure token-based authentication
-- **Protected Routes**: Admin routes require valid JWT tokens
-- **Input Validation**: Server-side validation for all inputs
-- **File Upload Security**: Restricted file types and size limits
+***
 
-## Development
+## Database Schemas
 
-### Adding New Features
-1. Create React components in `src/components/`
-2. Add routes in `src/App.js` (React Router v6)
-3. Create API endpoints in `backend/server.js`
-4. Update MongoDB schemas as needed
-5. Use Tailwind utility classes for consistent styling
+- **User**: Stores student registration and profile details.
+- **Admin**: Stores admin authentication details.
+- **Question**: Stores test questions of various types (MCQ, Coding, Paragraph).
+- **Result**: Stores assessment results and associated metadata.
 
-### Database Schemas
-- **User**: Student registration data
-- **Admin**: Admin authentication data
-- **Question**: Test questions with options
-- **Result**: Assessment results and scores
+***
 
 ## Troubleshooting
 
-### Common Issues
-1. **MongoDB Connection**: Ensure your MongoDB URI is correct
-2. **Email Not Sending**: Check Gmail app password configuration
-3. **File Upload Fails**: Verify CSV format and file size
-4. **JWT Errors**: Check JWT_SECRET in environment variables
+- Ensure correct MongoDB URI in `.env`.
+- Verify Gmail app password configuration for email features.
+- Confirm CSV file format compliance for question uploads.
+- Check JWT_SECRET correctness to avoid authentication errors.
+- Monitor console for runtime errors and database connection logs.
 
-### Logs
-Check the console for detailed error messages and connection status.
+***
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+Contributions are welcome! Please:
+1. Fork the repository.
+2. Create a new feature branch.
+3. Make your changes with proper testing.
+4. Submit a pull request describing your changes.
+
+***
 
 ## License
 
 This project is licensed under the MIT License.
+
+***
+
+## About
+
+This platform is designed specifically to test undergraduate students efficiently and securely, providing streamlined assessment and administrative tools.
+
+***
+
+This README aims to provide a clear and detailed overview of the project, its structure, features, and usage for developers and stakeholders alike.
+
+[1](https://github.com/Daksh-9/Company-Hiring-Platform)
