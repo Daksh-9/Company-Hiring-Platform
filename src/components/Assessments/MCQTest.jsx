@@ -1,361 +1,448 @@
-import React, { useRef, useState } from 'react';
-import useExamGuard from '../../utils/useExamGuard';
+// src/pages/MCQTest.jsx
+import React, { useEffect, useMemo, useState } from 'react';
+import { apiFetch } from '../../utils/api';
+import { isTokenValid, logoutAndRedirect } from '../../utils/auth';
 
 const MCQTest = () => {
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [answers, setAnswers] = useState({});
-  const [timeLeft, setTimeLeft] = useState(1800); // 30 minutes in seconds
-  const [isTestStarted, setIsTestStarted] = useState(false);
-  const [isTestCompleted, setIsTestCompleted] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [skippedQuestions, setSkippedQuestions] = useState(new Set());
-  const timerRef = useRef(null);
+  const [sessionId, setSessionId] = useState(null);
+  const [currentQuestion, setCurrentQuestion] = useState(null);
+  const [questionNumber, setQuestionNumber] = useState(0); // 1-based (backend)
+  const [totalQuestions, setTotalQuestions] = useState(0);
+  const [timeRemaining, setTimeRemaining] = useState(0);
+  const [loading, setLoading] = useState(false);
 
-  useExamGuard({
-    enabled: isTestStarted && !isTestCompleted,
-    onFirstViolation: () => {
-      setIsPaused(true);
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    },
-    onSecondViolation: () => {
-      handleSubmitTest();
-    },
-    onFocusReturn: () => {
-      // Resume only if test is started, not completed, and paused
-      if (isTestStarted && !isTestCompleted && isPaused && !timerRef.current) {
-        setIsPaused(false);
-        timerRef.current = setInterval(() => {
-          setTimeLeft(prev => {
-            if (prev <= 1) {
-              clearInterval(timerRef.current);
-              timerRef.current = null;
-              handleSubmitTest();
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-      }
+  // UI state
+  const [testStarted, setTestStarted] = useState(false);
+  const [testCompleted, setTestCompleted] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+  const [selectedAnswer, setSelectedAnswer] = useState('');
+  const [answersMap, setAnswersMap] = useState({});        // { [qNum]: 'A'|'B'|'C'|'D' }
+  const [skippedSet, setSkippedSet] = useState(new Set()); // Set<qNum>
+
+  const guardAuth = () => {
+    if (!isTokenValid()) {
+      alert('Your session has expired. Please log in again.');
+      logoutAndRedirect();
+      return false;
     }
-  });
-
-  const questions = [
-    {
-      id: 1,
-      question: "What is the primary purpose of React?",
-      options: [
-        "To create server-side applications",
-        "To build user interfaces",
-        "To manage databases",
-        "To handle API requests"
-      ],
-      correctAnswer: 1
-    },
-    {
-      id: 2,
-      question: "Which hook is used to manage state in functional components?",
-      options: [
-        "useEffect",
-        "useState",
-        "useContext",
-        "useReducer"
-      ],
-      correctAnswer: 1
-    },
-    {
-      id: 3,
-      question: "What is the virtual DOM in React?",
-      options: [
-        "A real DOM element",
-        "A lightweight copy of the real DOM",
-        "A database",
-        "A server component"
-      ],
-      correctAnswer: 1
-    },
-    {
-      id: 4,
-      question: "Which method is called when a component is first rendered?",
-      options: [
-        "componentDidMount",
-        "componentWillMount",
-        "render",
-        "constructor"
-      ],
-      correctAnswer: 0
-    },
-    {
-      id: 5,
-      question: "What is JSX?",
-      options: [
-        "A JavaScript library",
-        "A syntax extension for JavaScript",
-        "A CSS framework",
-        "A database query language"
-      ],
-      correctAnswer: 1
-    }
-  ];
-
-  const handleAnswerSelect = (questionId, optionIndex) => {
-    setAnswers(prev => ({
-      ...prev,
-      [questionId]: optionIndex
-    }));
+    return true;
   };
 
-  const handleNextQuestion = () => {
-    if (currentQuestion < questions.length - 1) {
-      setCurrentQuestion(currentQuestion + 1);
-    }
-  };
-
-  const handlePreviousQuestion = () => {
-    if (currentQuestion > 0) {
-      setCurrentQuestion(currentQuestion - 1);
-    }
-  };
-
-  const handleSkipQuestion = () => {
-    setSkippedQuestions(prev => new Set(prev).add(currentQuestion));
-    if (currentQuestion < questions.length - 1) {
-      setCurrentQuestion(currentQuestion + 1);
-    }
-  };
-
-  const handleStartTest = () => {
-    setIsTestStarted(true);
-    // Start timer
-    timerRef.current = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current);
-          timerRef.current = null;
-          handleSubmitTest();
-          return 0;
-        }
-        return prev - 1;
+  const startTest = async () => {
+    if (!guardAuth()) return;
+    try {
+      setLoading(true);
+      const res = await apiFetch('/api/user/start-test/MCQ', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timeLimit: 60 }),
       });
-    }, 1000);
-  };
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Error starting test');
 
-  const handleSubmitTest = () => {
-    setIsTestCompleted(true);
-    setIsTestStarted(false);
-    setIsPaused(false);
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
+      setSessionId(data.sessionId);
+      setTotalQuestions(data.totalQuestions);
+      setTestStarted(true);
+      setAnswersMap({});
+      setSkippedSet(new Set());
+      await loadCurrentQuestion(data.sessionId);
+    } catch (e) {
+      alert(e.message || 'Could not start test');
+    } finally {
+      setLoading(false);
     }
   };
+
+  const loadCurrentQuestion = async (id) => {
+    if (!guardAuth()) return;
+    try {
+      const res = await apiFetch(`/api/user/test-session/${id}/question`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Error loading question');
+
+      setCurrentQuestion(data.question);
+      setQuestionNumber(data.questionNumber);
+      setTimeRemaining(data.timeRemaining);
+
+      // restore previously chosen answer for this question number
+      const prev = answersMap[data.questionNumber];
+      setSelectedAnswer(prev || '');
+    } catch (err) {
+      if (!/Auth error/.test(String(err))) console.error('Error loading question:', err.message);
+    }
+  };
+
+
+  
+  const handleSelect = (letter) => {
+    setSelectedAnswer(letter);
+    setAnswersMap((prev) => ({ ...prev, [questionNumber]: letter }));
+    setSkippedSet((prev) => {
+      if (!prev.has(questionNumber)) return prev;
+      const next = new Set(prev);
+      next.delete(questionNumber);
+      return next;
+    });
+  };
+
+  // Next = submit answer and advance
+  const handleNext = async () => {
+    if (!selectedAnswer) {
+      alert('Select an answer or use Skip.');
+      return;
+    }
+    await submitAnswerInternal(selectedAnswer);
+  };
+
+  // Skip = advance without an answer (mark red)
+  const handleSkip = async () => {
+    setSkippedSet((prev) => {
+      const next = new Set(prev);
+      next.add(questionNumber);
+      return next;
+    });
+    setAnswersMap((prev) => {
+      if (!prev[questionNumber]) return prev;
+      const { [questionNumber]: _drop, ...rest } = prev;
+      return rest;
+    });
+    setSelectedAnswer('');
+    await submitAnswerInternal(null);
+  };
+
+  // Previous = go back one question (no submit)
+  const handlePrevious = async () => {
+    if (!guardAuth()) return;
+    if (questionNumber <= 1 || !sessionId) return; // first question, nothing to do
+    try {
+      setLoading(true);
+      const res = await apiFetch(`/api/user/test-session/${sessionId}/previous`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Error going to previous question');
+      await loadCurrentQuestion(sessionId);
+    } catch (err) {
+      if (!/Auth error/.test(String(err))) alert(err.message || 'Error moving to previous question');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitAnswerInternal = async (answerLetter /* string|null */) => {
+    if (!guardAuth()) return;
+    try {
+      setLoading(true);
+      const res = await apiFetch(`/api/user/test-session/${sessionId}/answer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ selectedAnswer: answerLetter }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Error submitting answer');
+
+      if (data.isLastQuestion) {
+        setCurrentQuestion(null);
+      } else {
+        await loadCurrentQuestion(sessionId);
+      }
+    } catch (err) {
+      if (!/Auth error/.test(String(err))) alert(err.message || 'Error submitting answer');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitTest = async () => {
+    if (!window.confirm('Submit test?')) return;
+    if (!guardAuth()) return;
+    try {
+      setLoading(true);
+      const res = await apiFetch(`/api/user/test-session/${sessionId}/submit`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Error submitting test');
+
+      setTestResult(data);
+      setTestCompleted(true);
+    } catch (err) {
+      if (!/Auth error/.test(String(err))) alert(err.message || 'Error submitting test');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // client-side countdown display
+  useEffect(() => {
+    if (testStarted && !testCompleted && timeRemaining > 0) {
+      const timer = setTimeout(() => {
+        setTimeRemaining((prev) => {
+          if (prev <= 1) {
+            submitTest();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [testStarted, testCompleted, timeRemaining]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const formatTime = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const secs = (seconds % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
   };
 
-  const calculateScore = () => {
-    let correct = 0;
-    Object.keys(answers).forEach(questionId => {
-      const question = questions.find(q => q.id === parseInt(questionId));
-      if (question && answers[questionId] === question.correctAnswer) {
-        correct++;
-      }
-    });
-    return Math.round((correct / questions.length) * 100);
+  // Sidebar badge color
+  const getBadgeClasses = (idx) => {
+    const base = 'w-10 h-10 rounded border text-sm flex items-center justify-center';
+    if (answersMap[idx]) return `${base} bg-green-500 text-white border-green-500`; // answered
+    if (skippedSet.has(idx)) return `${base} bg-red-500 text-white border-red-500`;  // skipped
+    return `${base} bg-gray-200 text-gray-800 border-gray-300`;                      // untouched
   };
 
-  if (!isTestStarted && !isTestCompleted) {
+  const progressPct = useMemo(() => {
+    const answered = Object.keys(answersMap).length;
+    const skipped = skippedSet.size;
+    const done = Math.min(totalQuestions, answered + skipped);
+    return totalQuestions ? Math.round((done / totalQuestions) * 100) : 0;
+  }, [answersMap, skippedSet, totalQuestions]);
+
+  // ----- RENDER -----
+  if (!testStarted) {
     return (
-      <div className="test-intro">
-        <div className="test-intro-card">
-          <h2>MCQ Test</h2>
-          <div className="test-info">
-            <div className="info-item">
-              <i className="fas fa-question-circle"></i>
-              <span>{questions.length} Questions</span>
+      <div className="min-h-[70vh] w-full flex items-center justify-center px-4">
+        <div className="w-full max-w-3xl bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+          <h1 className="text-3xl md:text-4xl overflow-hidden font-bold text-center text-gray-900 mb-6">
+            MCQ Test
+          </h1>
+
+          {/* quick facts */}
+          <div className="flex flex-wrap items-center justify-center gap-6 mb-8 text-gray-700">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-indigo-500" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h18v2H3zM3 11h18v2H3zM3 17h18v2H3z"/></svg>
+              <span>{totalQuestions || 25} Questions</span>
             </div>
-            <div className="info-item">
-              <i className="fas fa-clock"></i>
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-indigo-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1a11 11 0 1 0 11 11A11.012 11.012 0 0 0 12 1Zm1 11H7V10h4V5h2Z"/></svg>
               <span>30 Minutes</span>
             </div>
-            <div className="info-item">
-              <i className="fas fa-brain"></i>
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-indigo-500" viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h10v2H4z"/></svg>
               <span>Multiple Choice</span>
             </div>
           </div>
-          <div className="test-instructions">
-            <h3>Instructions:</h3>
-            <ul>
-              <li>Read each question carefully</li>
-              <li>Select the best answer from the options provided</li>
-              <li>You can navigate between questions</li>
-              <li>Timer will automatically submit the test when time runs out</li>
-              <li>You cannot go back once the test is submitted</li>
+
+          {/* instructions */}
+          <div className="space-y-3 text-gray-700 mb-8">
+            <h2 className="text-lg font-semibold">Instructions:</h2>
+            <ul className="space-y-2 list-disc pl-6">
+              <li>Read each question carefully.</li>
+              <li>Select the best answer from the given options.</li>
+              <li>You can move to the next question or skip if unsure.</li>
+              <li>The timer will automatically submit when time runs out.</li>
+              <li>Do not switch tabs or windows during the test.</li>
             </ul>
           </div>
-          <button className="btn btn-primary" onClick={handleStartTest}>
-            <i className="fas fa-play"></i>
-            Start Test
-          </button>
+
+          {/* start */}
+          <div className="flex justify-center">
+            <button
+              onClick={startTest}
+              disabled={loading}
+              className="w-full md:w-2/3 inline-flex items-center justify-center px-6 py-4 rounded-xl text-white font-medium
+                         bg-gradient-to-r from-indigo-500 to-purple-600 shadow-lg shadow-purple-200
+                         hover:from-indigo-600 hover:to-purple-700 transition"
+            >
+              <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              {loading ? 'Starting…' : 'Start Test'}
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  if (isTestCompleted) {
-    const score = calculateScore();
+  if (testCompleted) {
     return (
-      <div className="test-results">
-        <div className="results-card">
-          <h2>Test Completed!</h2>
-          <div className="score-display">
-            <div className="score-circle">
-              <span className="score-number">{score}%</span>
-            </div>
-            <p>Your Score</p>
-          </div>
-          <div className="results-summary">
-            <div className="summary-item">
-              <span>Questions Answered:</span>
-              <span>{Object.keys(answers).length}/{questions.length}</span>
-            </div>
-            <div className="summary-item">
-              <span>Correct Answers:</span>
-              <span>{Object.keys(answers).filter(qId => {
-                const question = questions.find(q => q.id === parseInt(qId));
-                return question && answers[qId] === question.correctAnswer;
-              }).length}</span>
-            </div>
-          </div>
-          <button className="btn btn-primary" onClick={() => window.location.href = '/dashboard'}>
-            <i className="fas fa-home"></i>
-            Back to Dashboard
-          </button>
-        </div>
+      <div className="p-6 text-center">
+        <h1 className="text-2xl mb-4">Test Completed</h1>
+        {testResult && (
+          <>
+            <p className="mb-2">
+              Score: {testResult.score}/{testResult.totalQuestions}
+            </p>
+            <p className="mb-4">Percentage: {testResult.percentage}%</p>
+          </>
+        )}
+        <button
+          onClick={() => window.location.href = '/dashboard'}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded"
+        >
+          Back to Dashboard
+        </button>
       </div>
     );
   }
-
-  const currentQ = questions[currentQuestion];
 
   return (
     <div className="w-full h-full flex">
-      {/* Sidebar ~20% */}
-      <aside className="hidden md:block w-1/5 border-r bg-white">
+      {/* Sidebar */}
+      <aside className="hidden md:block w-64 border-r bg-white">
         <div className="p-4 border-b flex items-center justify-between">
           <span className="font-semibold">Questions</span>
-          <span className="text-sm text-gray-500">{currentQuestion + 1}/{questions.length}</span>
+          <span className="text-sm text-gray-500">
+            {Math.max(1, questionNumber)}/{totalQuestions || 0}
+          </span>
         </div>
+
         <div className="p-4 grid grid-cols-5 gap-2">
-          {questions.map((q, index) => {
-            const isAnswered = answers[q.id] !== undefined;
-            const isSkipped = skippedQuestions.has(index);
-            const base = 'w-10 h-10 rounded border text-sm flex items-center justify-center';
-            const color = isAnswered
-              ? 'bg-green-500 text-white border-green-500'
-              : isSkipped
-                ? 'bg-gray-300 text-gray-700 border-gray-300'
-                : 'bg-white text-gray-900 border-gray-300';
-            const active = currentQuestion === index ? 'ring-2 ring-indigo-500' : '';
+          {Array.from({ length: totalQuestions || 0 }).map((_, i) => {
+            const idx = i + 1; // 1-based
+            const active = idx === questionNumber ? 'ring-2 ring-indigo-500' : '';
             return (
               <button
-                key={q.id}
-                className={`${base} ${color} ${active}`}
-                onClick={() => setCurrentQuestion(index)}
-                title={`Question ${index + 1}`}
+                key={idx}
+                className={`${getBadgeClasses(idx)} ${active}`}
+                title={`Question ${idx}`}
+                onClick={() => {}}
+                disabled
               >
-                {index + 1}
+                {idx}
               </button>
             );
           })}
         </div>
+
         <div className="px-4 pb-4 text-xs text-gray-600 space-y-1">
-          <div className="flex items-center gap-2"><span className="w-3 h-3 bg-green-500 rounded-sm"></span> Answered</div>
-          <div className="flex items-center gap-2"><span className="w-3 h-3 bg-white border border-gray-300 rounded-sm"></span> Unanswered</div>
-          <div className="flex items-center gap-2"><span className="w-3 h-3 bg-gray-300 rounded-sm"></span> Skipped</div>
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 bg-green-500 rounded-sm" /> Answered
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 bg-gray-300 rounded-sm border border-gray-400" /> Unanswered
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 bg-red-500 rounded-sm" /> Skipped
+          </div>
         </div>
       </aside>
 
-      {/* Main ~80% */}
+      {/* Main */}
       <main className="flex-1 flex flex-col">
-        <div className="test-header px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
-          <div className="test-progress w-full max-w-md">
-            <span>Question {currentQuestion + 1} of {questions.length}</span>
-            <div className="progress-bar">
-              <div 
-                className="progress-fill" 
-                style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}
-              ></div>
+        {/* Header */}
+        <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
+          <div className="w-full max-w-md">
+            <div className="text-sm text-gray-700">
+              Question {Math.max(1, questionNumber)} of {totalQuestions || 0}
+            </div>
+            <div className="h-2 bg-gray-200 rounded mt-2 overflow-hidden">
+              <div
+                className="h-2 bg-indigo-500 transition-all"
+                style={{ width: `${progressPct}%` }}
+              />
             </div>
           </div>
-          <div className="test-timer ml-4">
-            <i className="fas fa-clock"></i>
-            <span className="ml-1">{formatTime(timeLeft)}</span>
+          <div className="ml-4 font-mono">
+            ⏱ {formatTime(timeRemaining)}
           </div>
         </div>
 
+        {/* Question */}
         <div className="flex-1 flex items-center justify-center p-4">
-          <div className="question-card w-full max-w-3xl">
-            <h3 className="question-text text-center mb-6">{currentQ.question}</h3>
-            <div className="options-list max-w-2xl mx-auto">
-              {currentQ.options.map((option, index) => (
-                <label 
-                  key={index} 
-                  className={`option-item ${answers[currentQ.id] === index ? 'selected' : ''}`}
-                >
-                  <input
-                    type="radio"
-                    name={`question-${currentQ.id}`}
-                    value={index}
-                    checked={answers[currentQ.id] === index}
-                    onChange={() => handleAnswerSelect(currentQ.id, index)}
-                  />
-                  <span className="option-text">{option}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        </div>
+          <div className="w-full max-w-3xl">
+            {currentQuestion ? (
+              <>
+                <h2 className="text-xl font-semibold text-center mb-6">
+                  {currentQuestion.question}
+                </h2>
 
-        <div className="test-navigation px-4 py-3 border-t flex items-center justify-between bg-white">
-          <button 
-            className="btn btn-secondary" 
-            onClick={handlePreviousQuestion}
-            disabled={currentQuestion === 0}
-          >
-            <i className="fas fa-arrow-left"></i>
-            Previous
-          </button>
+                <div className="max-w-2xl mx-auto space-y-3">
+                  {['A', 'B', 'C', 'D'].map((letter) => {
+                    const text = currentQuestion[`option${letter}`];
+                    if (!text) return null;
 
-          <div className="flex items-center gap-2">
-            <button 
-              className="btn btn-secondary"
-              onClick={handleSkipQuestion}
-            >
-              Skip
-            </button>
-            {currentQuestion === questions.length - 1 ? (
-              <button className="btn btn-primary" onClick={handleSubmitTest}>
-                <i className="fas fa-check"></i>
-                Submit Test
-              </button>
+                    const isSelected =
+                      (answersMap[questionNumber] || selectedAnswer) === letter;
+
+                    return (
+                      <label
+                        key={letter}
+                        className={`flex items-start gap-2 p-3 border rounded cursor-pointer transition
+                          ${isSelected
+                            ? 'bg-green-50 border-green-500 text-green-800'
+                            : 'bg-white border-gray-300 hover:border-gray-400'
+                          }`}
+                      >
+                        <input
+                          type="radio"
+                          name={`q-${questionNumber}`}
+                          value={letter}
+                          checked={isSelected}
+                          onChange={() => handleSelect(letter)}
+                          className="mt-1"
+                        />
+                        <div>
+                          <strong className="mr-2">{letter}.</strong>
+                          <span>{text}</span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </>
             ) : (
-              <button className="btn btn-primary" onClick={handleNextQuestion}>
-                Next
-                <i className="fas fa-arrow-right"></i>
-              </button>
+              <div className="text-center text-gray-700">
+                <p className="mb-4">No more questions. You can submit your test now.</p>
+                <button
+                  onClick={submitTest}
+                  disabled={loading}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded"
+                >
+                  {loading ? 'Submitting…' : 'Submit Test'}
+                </button>
+              </div>
             )}
           </div>
         </div>
+
+        {/* Navigation */}
+        {currentQuestion && (
+          <div className="px-4 py-3 border-t bg-white flex items-center justify-between">
+            {/* Previous on the left */}
+            <button
+              onClick={handlePrevious}
+              disabled={loading || questionNumber <= 1}
+              className={`px-4 py-2 rounded border ${
+                questionNumber <= 1
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                  : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              ← Previous
+            </button>
+
+            {/* Right side: Skip & Next */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleSkip}
+                disabled={loading}
+                className="bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 px-4 py-2 rounded"
+              >
+                Skip
+              </button>
+              <button
+                onClick={handleNext}
+                disabled={loading}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
 };
 
 export default MCQTest;
-
