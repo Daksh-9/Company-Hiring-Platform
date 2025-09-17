@@ -23,6 +23,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(cookieParser());
+
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, '../public')));
 
@@ -380,6 +381,37 @@ app.put('/api/user/profile', authenticateToken, async (req, res) => {
     }
 });
 
+// NEW PROTECTED ROUTE FOR FETCHING QUESTIONS
+app.get('/api/questions/:testType', authenticateToken, async (req, res) => {
+    try {
+        const { testType } = req.params;
+        const questions = await Question.find({ testType });
+        res.json({ questions });
+    } catch (error) {
+        console.error('Error fetching questions:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// NEW PROTECTED ROUTE FOR SAVING TEST RESULTS
+app.post('/api/test-result', authenticateToken, async (req, res) => {
+    try {
+        const { testType, score, totalQuestions } = req.body;
+        const newResult = new Result({
+            studentId: req.user.userId,
+            testType,
+            score,
+            totalQuestions
+        });
+        await newResult.save();
+        res.status(201).json({ message: 'Result saved successfully', result: newResult });
+    } catch (error) {
+        console.error('Error saving test result:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+
 // Admin Routes
 app.post('/api/admin/login', async (req, res) => {
     try {
@@ -436,6 +468,18 @@ app.get('/api/admin/questions', authenticateToken, async (req, res) => {
         res.json({ questions });
     } catch (error) {
         console.error('Error fetching questions:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Delete all questions
+app.delete('/api/admin/questions', authenticateToken, async (req, res) => {
+    try {
+        const result = await Question.deleteMany({});
+        console.log(`✅ Deleted ${result.deletedCount} questions.`);
+        res.json({ message: `Successfully deleted ${result.deletedCount} questions.` });
+    } catch (error) {
+        console.error('Error deleting questions:', error);
         res.status(500).json({ message: 'Internal server error' });
     }
 });

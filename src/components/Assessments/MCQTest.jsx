@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import useExamGuard from '../../utils/useExamGuard';
 
 const MCQTest = () => {
@@ -9,7 +9,62 @@ const MCQTest = () => {
   const [isTestCompleted, setIsTestCompleted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [skippedQuestions, setSkippedQuestions] = useState(new Set());
+  const [questions, setQuestions] = useState([]); // State to hold fetched questions
+  const [loading, setLoading] = useState(true); // Loading state
+  const [error, setError] = useState(''); // Error state
   const timerRef = useRef(null);
+
+  useEffect(() => {
+    fetchQuestions();
+  }, []);
+
+  const fetchQuestions = async () => {
+    try {
+      const token = localStorage.getItem('userToken'); // Get student's token
+      if (!token) {
+        setError('User not authenticated');
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch('/api/questions/MCQ', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setQuestions(data.questions);
+      } else {
+        setError('Failed to fetch questions');
+      }
+    } catch (err) {
+      setError('Network error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveTestResult = async (score, totalQuestions) => {
+    try {
+      const token = localStorage.getItem('userToken');
+      await fetch('/api/test-result', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          testType: 'MCQ',
+          score,
+          totalQuestions
+        })
+      });
+    } catch (err) {
+      console.error('Failed to save test result:', err);
+    }
+  };
 
   useExamGuard({
     enabled: isTestStarted && !isTestCompleted,
@@ -41,64 +96,6 @@ const MCQTest = () => {
       }
     }
   });
-
-  const questions = [
-    {
-      id: 1,
-      question: "What is the primary purpose of React?",
-      options: [
-        "To create server-side applications",
-        "To build user interfaces",
-        "To manage databases",
-        "To handle API requests"
-      ],
-      correctAnswer: 1
-    },
-    {
-      id: 2,
-      question: "Which hook is used to manage state in functional components?",
-      options: [
-        "useEffect",
-        "useState",
-        "useContext",
-        "useReducer"
-      ],
-      correctAnswer: 1
-    },
-    {
-      id: 3,
-      question: "What is the virtual DOM in React?",
-      options: [
-        "A real DOM element",
-        "A lightweight copy of the real DOM",
-        "A database",
-        "A server component"
-      ],
-      correctAnswer: 1
-    },
-    {
-      id: 4,
-      question: "Which method is called when a component is first rendered?",
-      options: [
-        "componentDidMount",
-        "componentWillMount",
-        "render",
-        "constructor"
-      ],
-      correctAnswer: 0
-    },
-    {
-      id: 5,
-      question: "What is JSX?",
-      options: [
-        "A JavaScript library",
-        "A syntax extension for JavaScript",
-        "A CSS framework",
-        "A database query language"
-      ],
-      correctAnswer: 1
-    }
-  ];
 
   const handleAnswerSelect = (questionId, optionIndex) => {
     setAnswers(prev => ({
@@ -142,7 +139,7 @@ const MCQTest = () => {
     }, 1000);
   };
 
-  const handleSubmitTest = () => {
+  const handleSubmitTest = async () => {
     setIsTestCompleted(true);
     setIsTestStarted(false);
     setIsPaused(false);
@@ -150,6 +147,8 @@ const MCQTest = () => {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+    const score = calculateScore();
+    await saveTestResult(score, questions.length);
   };
 
   const formatTime = (seconds) => {
@@ -157,17 +156,36 @@ const MCQTest = () => {
     const remainingSeconds = seconds % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
-
-  const calculateScore = () => {
+  
+  const getCorrectAnswersCount = () => {
     let correct = 0;
+    const optionMap = ['A', 'B', 'C', 'D'];
     Object.keys(answers).forEach(questionId => {
-      const question = questions.find(q => q.id === parseInt(questionId));
-      if (question && answers[questionId] === question.correctAnswer) {
+      const question = questions.find(q => q._id === questionId);
+      if (question && optionMap[answers[questionId]] === question.correctAnswer) {
         correct++;
       }
     });
+    return correct;
+  };
+  
+  const calculateScore = () => {
+    if (questions.length === 0) return 0;
+    const correct = getCorrectAnswersCount();
     return Math.round((correct / questions.length) * 100);
   };
+
+  if (loading) {
+    return <div className="text-center p-6">Loading test questions...</div>;
+  }
+
+  if (error) {
+    return <div className="test-intro"><div className="test-intro-card"><h2 className="text-red-500">Error</h2><p>{error}</p></div></div>;
+  }
+
+  if (questions.length === 0) {
+    return <div className="test-intro"><div className="test-intro-card">No MCQ questions available. Please contact your admin.</div></div>;
+  }
 
   if (!isTestStarted && !isTestCompleted) {
     return (
@@ -226,10 +244,7 @@ const MCQTest = () => {
             </div>
             <div className="summary-item">
               <span>Correct Answers:</span>
-              <span>{Object.keys(answers).filter(qId => {
-                const question = questions.find(q => q.id === parseInt(qId));
-                return question && answers[qId] === question.correctAnswer;
-              }).length}</span>
+              <span>{getCorrectAnswersCount()}</span>
             </div>
           </div>
           <button className="btn btn-primary" onClick={() => window.location.href = '/dashboard'}>
@@ -242,7 +257,8 @@ const MCQTest = () => {
   }
 
   const currentQ = questions[currentQuestion];
-
+  const options = [currentQ.optionA, currentQ.optionB, currentQ.optionC, currentQ.optionD];
+  
   return (
     <div className="w-full h-full flex">
       {/* Sidebar ~20% */}
@@ -253,7 +269,7 @@ const MCQTest = () => {
         </div>
         <div className="p-4 grid grid-cols-5 gap-2">
           {questions.map((q, index) => {
-            const isAnswered = answers[q.id] !== undefined;
+            const isAnswered = answers[q._id] !== undefined;
             const isSkipped = skippedQuestions.has(index);
             const base = 'w-10 h-10 rounded border text-sm flex items-center justify-center';
             const color = isAnswered
@@ -264,7 +280,7 @@ const MCQTest = () => {
             const active = currentQuestion === index ? 'ring-2 ring-indigo-500' : '';
             return (
               <button
-                key={q.id}
+                key={q._id}
                 className={`${base} ${color} ${active}`}
                 onClick={() => setCurrentQuestion(index)}
                 title={`Question ${index + 1}`}
@@ -303,17 +319,17 @@ const MCQTest = () => {
           <div className="question-card w-full max-w-3xl">
             <h3 className="question-text text-center mb-6">{currentQ.question}</h3>
             <div className="options-list max-w-2xl mx-auto">
-              {currentQ.options.map((option, index) => (
+              {options.map((option, index) => (
                 <label 
                   key={index} 
-                  className={`option-item ${answers[currentQ.id] === index ? 'selected' : ''}`}
+                  className={`option-item ${answers[currentQ._id] === index ? 'selected' : ''}`}
                 >
                   <input
                     type="radio"
-                    name={`question-${currentQ.id}`}
+                    name={`question-${currentQ._id}`}
                     value={index}
-                    checked={answers[currentQ.id] === index}
-                    onChange={() => handleAnswerSelect(currentQ.id, index)}
+                    checked={answers[currentQ._id] === index}
+                    onChange={() => handleAnswerSelect(currentQ._id, index)}
                   />
                   <span className="option-text">{option}</span>
                 </label>
@@ -358,4 +374,3 @@ const MCQTest = () => {
 };
 
 export default MCQTest;
-
