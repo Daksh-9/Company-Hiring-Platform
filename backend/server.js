@@ -18,7 +18,8 @@ const PORT = process.env.PORT || 5001;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname)));
+// Serve static files from the 'public' directory
+app.use(express.static(path.join(__dirname, '../public')));
 
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://dbuser:Vivek123@cluster0.sx83e.mongodb.net/hiring_platform';
@@ -229,20 +230,7 @@ transporter.verify((error, success) => {
     }
 });
 
-// Routes
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-app.get('/signup', (req, res) => {
-    res.sendFile(path.join(__dirname, 'signup.html'));
-});
-
-app.get('/login', (req, res) => {
-    res.sendFile(path.join(__dirname, 'login.html'));
-});
-
-// API Routes
+// API Routes (backend)
 app.post('/api/signup', async (req, res) => {
     try {
         const { 
@@ -417,7 +405,7 @@ app.post('/api/admin/login', async (req, res) => {
 // Get admin results
 app.get('/api/admin/results', authenticateToken, async (req, res) => {
     try {
-        const results = await Result.find().populate('studentId', 'firstName lastName email');
+        const results = await Result.find().populate('studentId', 'firstName lastName email collegeName branch yearOfStudy');
         res.json({ results });
     } catch (error) {
         console.error('Error fetching results:', error);
@@ -444,8 +432,6 @@ app.post('/api/admin/upload-questions', authenticateToken, upload.single('csvFil
         }
 
         const questions = [];
-        const results = [];
-
         fs.createReadStream(req.file.path)
             .pipe(csv())
             .on('data', (data) => {
@@ -589,6 +575,12 @@ app.post('/api/admin/create-default', async (req, res) => {
         res.status(500).json({ message: 'Internal server error' });
     }
 });
+
+// Serve the React app for all other routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public', 'index.html'));
+});
+
 
 // Start server
 app.listen(PORT, () => {
