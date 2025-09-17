@@ -53,7 +53,6 @@ const LoginPage = () => {
       });
       const data = await response.json();
       if (response.ok) {
-        localStorage.setItem('userToken', data.token); // Store student's JWT token
         localStorage.setItem('userId', data.user.id); // Store student's ID
         localStorage.setItem('role', 'student'); // Store user role
         navigate('/dashboard');
@@ -74,7 +73,7 @@ const LoginPage = () => {
     setAdminErrors(errs);
     if (Object.keys(errs).length) return;
     setAdminLoading(true);
-  
+
     try {
       const res = await fetch('/api/admin/login', {
         method: 'POST',
@@ -82,9 +81,8 @@ const LoginPage = () => {
         body: JSON.stringify({ adminID: adminForm.userId, password: adminForm.password })
       });
       const data = await res.json();
-  
+
       if (res.ok) {
-        localStorage.setItem('adminToken', data.token); // Correctly save the token
         localStorage.setItem('adminID', data.adminID);
         localStorage.setItem('role', 'admin');
         navigate('/admin/dashboard');
