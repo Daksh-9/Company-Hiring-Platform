@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 const AdminTestQuestions = () => {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false); // New state for delete button loading
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -85,6 +86,40 @@ const AdminTestQuestions = () => {
     }
   };
 
+  // New function to handle deleting all questions
+  const handleDeleteAllQuestions = async () => {
+    if (!window.confirm('Are you sure you want to delete all existing questions? This action cannot be undone.')) {
+      return;
+    }
+
+    setDeleting(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch('/api/admin/questions', {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccess(data.message);
+        setQuestions([]); // Clear the questions in the state
+      } else {
+        setError(data.message || 'Deletion failed');
+      }
+    } catch (err) {
+      setError('Network error during deletion');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const downloadTemplate = () => {
     const csvContent = `question,optionA,optionB,optionC,optionD,correctAnswer,testType
 "What is the capital of France?","Paris","London","Berlin","Madrid","A","MCQ"
@@ -114,12 +149,20 @@ const AdminTestQuestions = () => {
       <div className="bg-white shadow rounded-lg p-6 mb-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-6">Upload Test Questions</h2>
         
-        <div className="mb-6">
+        <div className="mb-6 flex gap-4">
           <button
             onClick={downloadTemplate}
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium"
           >
             Download CSV Template
+          </button>
+           {/* New delete button */}
+          <button
+            onClick={handleDeleteAllQuestions}
+            disabled={deleting || questions.length === 0}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50"
+          >
+            {deleting ? 'Deleting...' : 'Delete All Questions'}
           </button>
         </div>
 
