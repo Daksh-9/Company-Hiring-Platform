@@ -47,6 +47,7 @@ const AdminResults = () => {
 
   const fetchResults = async () => {
     try {
+      setLoading(true);
       const token = localStorage.getItem('adminToken');
       const response = await fetch('/api/admin/results', {
         headers: {
@@ -105,6 +106,13 @@ const AdminResults = () => {
 
   const clearFilters = () => {
     setFilters({ college: '', year: '', branch: '', student: '' });
+  };
+  
+  // New function to handle refresh
+  const handleRefresh = () => {
+    setResults([]);
+    setFilteredResults([]);
+    fetchResults();
   };
 
   // Get unique values for filter options
@@ -238,6 +246,14 @@ const AdminResults = () => {
             className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm"
           >
             Clear Filters
+          </button>
+
+          {/* New Refresh button */}
+          <button
+            onClick={handleRefresh}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm"
+          >
+            Refresh
           </button>
         </div>
         
