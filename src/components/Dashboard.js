@@ -5,19 +5,33 @@ import MCQTest from "./Assessments/MCQTest";
 import CodingTest from "./Assessments/CodingTest";
 import ParagraphTest from "./Assessments/ParagraphTest";
 import Help from "./Help";
+import FullscreenWrapper from "./Assessments/FullscreenWrapper"; // Import the wrapper
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isInAssessment = location.pathname.startsWith('/dashboard/assessments/');
 
-  const handleLogout = () => {
-    // Clear any stored user data
-    localStorage.removeItem('user');
-    sessionStorage.clear();
+  const handleLogout = async () => {
+    try {
+        // Call the backend to clear the HttpOnly cookie
+        await fetch('/api/logout', { method: 'POST' });
+    } catch (error) {
+        console.error('Logout failed', error);
+    } finally {
+        // Clear local storage and navigate
+        localStorage.removeItem('user');
+        localStorage.removeItem('role');
+        localStorage.removeItem('userId');
+        navigate('/');
+    }
+  };
 
-    // Redirect to login page
-    navigate('/');
+  const handleFullscreenExit = () => {
+    // This function is triggered when the user exits fullscreen.
+    // The useExamGuard hook will already detect this as a 'blur' event and handle the violation.
+    // You can add an extra alert here if you wish.
+    alert("You have left fullscreen mode. This is considered a violation and may result in test submission.");
   };
 
   return (
@@ -63,9 +77,33 @@ const Dashboard = () => {
           <Route path="/" element={<DashboardHome />} />
           <Route path="/profile" element={<MyProfile />} />
           <Route path="/assessments" element={<AssessmentsHome />} />
-          <Route path="/assessments/mcq" element={<MCQTest />} />
-          <Route path="/assessments/coding" element={<CodingTest />} />
-          <Route path="/assessments/paragraph" element={<ParagraphTest />} />
+          
+          {/* Updated routes to enforce fullscreen mode for each test */}
+          <Route 
+            path="/assessments/mcq" 
+            element={
+              <FullscreenWrapper testName="MCQ Test" onExit={handleFullscreenExit}>
+                <MCQTest />
+              </FullscreenWrapper>
+            } 
+          />
+          <Route 
+            path="/assessments/coding" 
+            element={
+              <FullscreenWrapper testName="Coding Test" onExit={handleFullscreenExit}>
+                <CodingTest />
+              </FullscreenWrapper>
+            } 
+          />
+          <Route 
+            path="/assessments/paragraph" 
+            element={
+              <FullscreenWrapper testName="Paragraph Test" onExit={handleFullscreenExit}>
+                <ParagraphTest />
+              </FullscreenWrapper>
+            } 
+          />
+
           <Route path="/help" element={<Help />} />
         </Routes>
       </div>
@@ -108,17 +146,10 @@ const DashboardHome = () => {
       route: "/dashboard/assessments/paragraph"
     },
   ];
-  const handleLogout = () => {
-    // Clear any stored user data
-    localStorage.removeItem('user');
-    sessionStorage.clear();
-
-    // Redirect to login page
-    navigate('/landingPage');
-  };
 
   const handleTestStart = (route) => {
-    window.location.href = route;
+    // Navigate to the route, which will first render the FullscreenWrapper
+    navigate(route);
   };
 
   return (

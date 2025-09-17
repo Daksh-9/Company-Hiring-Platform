@@ -11,13 +11,19 @@ const csv = require('csv-parser');
 const nodemailer = require('nodemailer');
 const path = require('path');
 const fs = require('fs');
+const cookieParser = require('cookie-parser');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: 'http://localhost:5002', // Allow requests from your frontend
+    credentials: true // Allow cookies to be sent and received
+}));
 app.use(express.json());
+app.use(cookieParser());
+
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, '../public')));
 
@@ -192,8 +198,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 // Auth Middleware
 const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    const token = req.cookies.token;
 
     if (!token) {
         return res.status(401).json({ message: 'Access token required' });
@@ -233,11 +238,11 @@ transporter.verify((error, success) => {
 // API Routes (backend)
 app.post('/api/signup', async (req, res) => {
     try {
-        const { 
-            firstName, 
-            lastName, 
-            email, 
-            phone, 
+        const {
+            firstName,
+            lastName,
+            email,
+            phone,
             collegeName,
             branch,
             yearOfStudy,
@@ -247,9 +252,9 @@ app.post('/api/signup', async (req, res) => {
         // Validate required fields
         if (!firstName || !lastName || !email || !phone) {
             console.log('❌ Missing required fields');
-            return res.status(400).json({ 
-                success: false, 
-                message: 'All fields are required' 
+            return res.status(400).json({
+                success: false,
+                message: 'All fields are required'
             });
         }
         console.log('🔍 Checking if user already exists...');
@@ -257,9 +262,9 @@ app.post('/api/signup', async (req, res) => {
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             console.log('❌ User already exists:', email);
-            return res.status(400).json({ 
-                success: false, 
-                message: 'User with this email already exists' 
+            return res.status(400).json({
+                success: false,
+                message: 'User with this email already exists'
             });
         }
         console.log('👤 Creating new user...');
@@ -328,9 +333,15 @@ app.post('/api/user/login', async (req, res) => {
 
         const token = jwt.sign({ userId: user._id, email: user.email }, JWT_SECRET, { expiresIn: '24h' });
 
+        res.cookie('token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+            sameSite: 'strict',
+            maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        });
+
         res.json({
             message: 'Login successful',
-            token,
             user: {
                 id: user._id,
                 email: user.email
@@ -422,9 +433,15 @@ app.post('/api/admin/login', async (req, res) => {
 
         const token = jwt.sign({ adminID: admin.adminID }, JWT_SECRET, { expiresIn: '24h' });
 
+        res.cookie('token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        });
+
         res.json({
             message: 'Login successful',
-            token,
             adminID: admin.adminID
         });
     } catch (error) {
@@ -493,9 +510,9 @@ app.post('/api/admin/upload-questions', authenticateToken, upload.single('csvFil
                 try {
                     await Question.insertMany(questions);
                     fs.unlinkSync(req.file.path); // Delete uploaded file
-                    res.json({ 
-                        message: 'Questions uploaded successfully', 
-                        count: questions.length 
+                    res.json({
+                        message: 'Questions uploaded successfully',
+                        count: questions.length
                     });
                 } catch (error) {
                     console.error('Error saving questions:', error);
@@ -586,7 +603,7 @@ app.post('/api/test-user', async (req, res) => {
             password: 'testPassword123', // Add a password for the test user
             terms: true
         });
-        
+
         await testUser.save();
         console.log('✅ Test user created:', testUser._id);
         res.json({ success: true, message: 'Test user created', userId: testUser._id });

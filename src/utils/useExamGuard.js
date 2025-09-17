@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 /**
  * useExamGuard
  * Blocks right-click, copy/paste, selection, and common devtools/shortcut keys.
- * Warns on tab switch/blur. Restores everything on cleanup.
+ * Warns on tab switch/blur and mouse leaving the window. Restores everything on cleanup.
  */
 export default function useExamGuard(options) {
   const { enabled, onFirstViolation, onSecondViolation, onFocusReturn } = options || {};
@@ -45,11 +45,11 @@ export default function useExamGuard(options) {
       }
     };
 
-    const handleViolation = () => {
+    const handleViolation = (violationType = 'activity') => {
       // First violation: warn once and pause via callback
       if (warningCountRef.current === 0) {
         warningCountRef.current = 1;
-        alert('Leaving the test window is not allowed. Warning 1.');
+        alert(`Leaving the test window or suspicious activity (${violationType}) is not allowed. This is your first warning.`);
         if (typeof onFirstViolation === 'function') onFirstViolation();
         return;
       }
@@ -62,18 +62,25 @@ export default function useExamGuard(options) {
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        handleViolation();
+        handleViolation('tab_switch');
       } else {
         if (typeof onFocusReturn === 'function') onFocusReturn();
       }
     };
 
     const handleWindowBlur = () => {
-      handleViolation();
+      handleViolation('window_blur');
     };
 
     const handleWindowFocus = () => {
       if (typeof onFocusReturn === 'function') onFocusReturn();
+    };
+
+    // New handler for detecting when the mouse leaves the viewport
+    const handleMouseLeave = (e) => {
+      if (!e.relatedTarget && !e.toElement) {
+        handleViolation('mouse_leave');
+      }
     };
 
     const handleBeforeUnload = (e) => {
@@ -96,9 +103,11 @@ export default function useExamGuard(options) {
     window.addEventListener('blur', handleWindowBlur);
     window.addEventListener('focus', handleWindowFocus);
     window.addEventListener('beforeunload', handleBeforeUnload);
+    // Add the new mouse leave event listener
+    document.addEventListener('mouseout', handleMouseLeave, { capture: true });
 
     return () => {
-      // Restore
+      // Restore everything on cleanup
       document.body.style.userSelect = previousUserSelect;
       window.removeEventListener('contextmenu', handleContextMenu, { capture: true });
       window.removeEventListener('copy', handleCopy, { capture: true });
@@ -110,8 +119,8 @@ export default function useExamGuard(options) {
       window.removeEventListener('blur', handleWindowBlur);
       window.removeEventListener('focus', handleWindowFocus);
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      // Remove the mouse leave event listener
+      document.removeEventListener('mouseout', handleMouseLeave, { capture: true });
     };
   }, [enabled, onFirstViolation, onSecondViolation, onFocusReturn]);
 }
-
-
