@@ -53,6 +53,7 @@ const LoginPage = () => {
       });
       const data = await response.json();
       if (response.ok) {
+        localStorage.setItem('userToken', data.token); // Store student's token
         localStorage.setItem('userId', data.user.id); // Store student's ID
         localStorage.setItem('role', 'student'); // Store user role
         navigate('/dashboard');
@@ -83,6 +84,7 @@ const LoginPage = () => {
       const data = await res.json();
 
       if (res.ok) {
+        localStorage.setItem('adminToken', data.token);
         localStorage.setItem('adminID', data.adminID);
         localStorage.setItem('role', 'admin');
         navigate('/admin/dashboard');
@@ -186,7 +188,7 @@ const LoginPage = () => {
                         )}
                       </div>
                       <div className="text-right">
-                        <a href="#" className="text-sm text-gray-600 hover:text-gray-900">Forgot Password?</a>
+                        <button type="button" className="text-sm text-gray-600 hover:text-gray-900 bg-transparent border-none cursor-pointer">Forgot Password?</button>
                       </div>
                       <button
                         type="submit"
@@ -251,7 +253,7 @@ const LoginPage = () => {
                         )}
                       </div>
                       <div className="text-right">
-                        <a href="#" className="text-sm text-gray-600 hover:text-gray-900">Forgot Password?</a>
+                        <button type="button" className="text-sm text-gray-600 hover:text-gray-900 bg-transparent border-none cursor-pointer">Forgot Password?</button>
                       </div>
                       <button
                         type="submit"

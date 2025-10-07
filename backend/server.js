@@ -18,7 +18,7 @@ const PORT = process.env.PORT || 5001;
 
 // Middleware
 app.use(cors({
-    origin: 'http://localhost:5002', // Allow requests from your frontend
+    origin: 'http://localhost:3000', // Allow requests from your frontend
     credentials: true // Allow cookies to be sent and received
 }));
 app.use(express.json());
@@ -198,10 +198,24 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 // Auth Middleware
 const authenticateToken = (req, res, next) => {
-    const token = req.cookies.token;
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Extract token from "Bearer <token>"
 
     if (!token) {
-        return res.status(401).json({ message: 'Access token required' });
+        // Fallback to checking cookies for student routes if needed
+        const cookieToken = req.cookies.token;
+        if (!cookieToken) {
+            return res.status(401).json({ message: 'Access token required' });
+        }
+        // If cookie token exists, verify it and proceed
+        jwt.verify(cookieToken, JWT_SECRET, (err, user) => {
+            if (err) {
+                return res.status(403).json({ message: 'Invalid token' });
+            }
+            req.user = user;
+            next();
+        });
+        return;
     }
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
@@ -331,21 +345,15 @@ app.post('/api/user/login', async (req, res) => {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        const token = jwt.sign({ userId: user._id, email: user.email }, JWT_SECRET, { expiresIn: '24h' });
-
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-            sameSite: 'strict',
-            maxAge: 24 * 60 * 60 * 1000 // 24 hours
-        });
+        const token = jwt.sign({ userId: user._id, email: user.email, role: 'student' }, JWT_SECRET, { expiresIn: '24h' });
 
         res.json({
             message: 'Login successful',
             user: {
                 id: user._id,
                 email: user.email
-            }
+            },
+            token: token
         });
     } catch (error) {
         console.error('User login error:', error);
@@ -431,18 +439,12 @@ app.post('/api/admin/login', async (req, res) => {
             return res.status(401).json({ message: 'Invalid admin credentials' });
         }
 
-        const token = jwt.sign({ adminID: admin.adminID }, JWT_SECRET, { expiresIn: '24h' });
-
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 24 * 60 * 60 * 1000 // 24 hours
-        });
+        const token = jwt.sign({ adminID: admin.adminID, role: 'admin' }, JWT_SECRET, { expiresIn: '24h' });
 
         res.json({
             message: 'Login successful',
-            adminID: admin.adminID
+            adminID: admin.adminID,
+            token: token
         });
     } catch (error) {
         console.error('Admin login error:', error);
