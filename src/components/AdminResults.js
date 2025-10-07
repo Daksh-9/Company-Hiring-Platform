@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -37,21 +37,14 @@ const AdminResults = () => {
   });
   const [filteredResults, setFilteredResults] = useState([]);
 
-  useEffect(() => {
-    fetchResults();
-  }, []);
-
-  useEffect(() => {
-    applyFilters();
-  }, [results, filters]);
-
   const fetchResults = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('adminToken');
+      const token = localStorage.getItem('adminToken'); // Get the token from storage
       const response = await fetch('/api/admin/results', {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` // Add the Authorization header
         },
       });
 
@@ -59,7 +52,8 @@ const AdminResults = () => {
         const data = await response.json();
         setResults(data.results);
       } else {
-        setError('Failed to fetch results');
+        const data = await response.json();
+        setError(`Failed to fetch results: ${data.message}`);
       }
     } catch (err) {
       setError('Network error');
@@ -68,7 +62,7 @@ const AdminResults = () => {
     }
   };
 
-  const applyFilters = () => {
+  const applyFilters = useCallback(() => {
     let filtered = [...results];
     
     if (filters.college) {
@@ -98,7 +92,15 @@ const AdminResults = () => {
     }
     
     setFilteredResults(filtered);
-  };
+  }, [results, filters]);
+
+  useEffect(() => {
+    fetchResults();
+  }, []);
+
+  useEffect(() => {
+    applyFilters();
+  }, [applyFilters]);
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -108,20 +110,15 @@ const AdminResults = () => {
     setFilters({ college: '', year: '', branch: '', student: '' });
   };
   
-  // New function to handle refresh
   const handleRefresh = () => {
-    setResults([]);
-    setFilteredResults([]);
     fetchResults();
   };
 
-  // Get unique values for filter options
   const getUniqueValues = (key) => {
     const values = results.map(result => result.studentId?.[key]).filter(Boolean);
     return [...new Set(values)].sort();
   };
 
-  // Sample data for charts (replace with actual data from backend)
   const performanceData = {
     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
     datasets: [
@@ -177,7 +174,7 @@ const AdminResults = () => {
 
   if (error) {
     return (
-      <div className="text-center text-red-600">
+      <div className="text-center text-red-600 p-4">
         {error}
       </div>
     );
@@ -248,7 +245,6 @@ const AdminResults = () => {
             Clear Filters
           </button>
 
-          {/* New Refresh button */}
           <button
             onClick={handleRefresh}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm"
@@ -267,95 +263,49 @@ const AdminResults = () => {
         <div className="bg-white shadow rounded-lg p-6 mb-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Assessment Results Overview</h2>
           
-          {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
             <div className="bg-blue-50 p-4 rounded-lg">
               <h3 className="text-lg font-semibold text-blue-900">Total Students</h3>
-              <p className="text-3xl font-bold text-blue-600">{filteredResults.length || results.length}</p>
+              <p className="text-3xl font-bold text-blue-600">{[...new Set(results.map(r => r.studentId?._id))].length}</p>
             </div>
             <div className="bg-green-50 p-4 rounded-lg">
               <h3 className="text-lg font-semibold text-green-900">Average Score</h3>
               <p className="text-3xl font-bold text-green-600">
-                {filteredResults.length > 0 
-                  ? Math.round(filteredResults.reduce((sum, r) => sum + r.score, 0) / filteredResults.length)
-                  : Math.round(results.reduce((sum, r) => sum + r.score, 0) / results.length)
-                }%
+                {results.length > 0 
+                  ? `${Math.round(results.reduce((sum, r) => sum + r.score, 0) / results.length)}%`
+                  : 'N/A'
+                }
               </p>
             </div>
             <div className="bg-yellow-50 p-4 rounded-lg">
               <h3 className="text-lg font-semibold text-yellow-900">Tests Completed</h3>
-              <p className="text-3xl font-bold text-yellow-600">{filteredResults.length || results.length}</p>
+              <p className="text-3xl font-bold text-yellow-600">{results.length}</p>
             </div>
             <div className="bg-purple-50 p-4 rounded-lg">
               <h3 className="text-lg font-semibold text-purple-900">Pass Rate</h3>
               <p className="text-3xl font-bold text-purple-600">
-                {filteredResults.length > 0 
-                  ? Math.round((filteredResults.filter(r => r.score >= 60).length / filteredResults.length) * 100)
-                  : Math.round((results.filter(r => r.score >= 60).length / results.length) * 100)
-                }%
+                {results.length > 0 
+                  ? `${Math.round((results.filter(r => r.score >= 60).length / results.length) * 100)}%`
+                  : 'N/A'
+                }
               </p>
             </div>
           </div>
 
-          {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white p-4 rounded-lg border">
               <h3 className="text-lg font-semibold mb-4">Performance Trend</h3>
-              <Line 
-                data={performanceData}
-                options={{
-                  responsive: true,
-                  plugins: {
-                    legend: {
-                      position: 'top',
-                    },
-                  },
-                  scales: {
-                    y: {
-                      beginAtZero: true,
-                      max: 100,
-                    },
-                  },
-                }}
-              />
+              <Line data={performanceData} />
             </div>
-
             <div className="bg-white p-4 rounded-lg border">
               <h3 className="text-lg font-semibold mb-4">Test Type Performance</h3>
-              <Bar 
-                data={testTypeData}
-                options={{
-                  responsive: true,
-                  plugins: {
-                    legend: {
-                      position: 'top',
-                    },
-                  },
-                  scales: {
-                    y: {
-                      beginAtZero: true,
-                      max: 100,
-                    },
-                  },
-                }}
-              />
+              <Bar data={testTypeData} />
             </div>
-
             <div className="bg-white p-4 rounded-lg border lg:col-span-2">
               <h3 className="text-lg font-semibold mb-4">Score Distribution</h3>
               <div className="flex justify-center">
                 <div className="w-96">
-                  <Doughnut 
-                    data={scoreDistributionData}
-                    options={{
-                      responsive: true,
-                      plugins: {
-                        legend: {
-                          position: 'top',
-                        },
-                      },
-                    }}
-                  />
+                  <Doughnut data={scoreDistributionData} />
                 </div>
               </div>
             </div>
@@ -379,8 +329,8 @@ const AdminResults = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {(filteredResults.length > 0 ? filteredResults : results).map((result, index) => (
-                  <tr key={index} className="hover:bg-gray-50">
+                {filteredResults.map((result) => (
+                  <tr key={result._id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
                         {result.studentId?.firstName} {result.studentId?.lastName}

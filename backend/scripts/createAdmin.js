@@ -2,7 +2,7 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/hiring_platform';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:5002/hiring_platform';
 
 const [,, adminIDArg, passwordArg, emailArg] = process.argv;
 
