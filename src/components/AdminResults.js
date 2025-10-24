@@ -25,6 +25,143 @@ ChartJS.register(
   Legend
 );
 
+// Helper function to process raw results into chart data
+const processResultsForCharts = (results) => {
+  if (!results || results.length === 0) {
+      // FIX: Return safe default values immediately if no results exist
+      const emptyStats = {
+          totalStudents: 0,
+          averageOverallScore: 0,
+          testsCompleted: 0,
+          passRate: 0,
+      };
+      
+      const emptyChartData = { labels: ['N/A'], datasets: [{ data: [0], backgroundColor: ['#ccc'] }] };
+
+      return {
+          dashboardStats: emptyStats,
+          testTypeChartData: { labels: ['MCQ', 'Coding', 'Paragraph'], datasets: [{ label: 'Average Score (%)', data: [0, 0, 0], backgroundColor: ['rgba(75, 192, 192, 0.8)', 'rgba(54, 162, 235, 0.8)', 'rgba(255, 159, 64, 0.8)'], borderWidth: 1 }] },
+          scoreDistributionChartData: { labels: ['0-20', '21-40', '41-60', '61-80', '81-100'], datasets: [{ label: 'Number of Results', data: [0, 0, 0, 0, 0], backgroundColor: ['rgba(231, 76, 60, 0.8)', 'rgba(241, 196, 15, 0.8)', 'rgba(52, 152, 219, 0.8)', 'rgba(46, 204, 113, 0.8)', 'rgba(155, 89, 182, 0.8)'], hoverOffset: 4 }] },
+          performanceTrendData: { labels: ['No Data'], datasets: [{ label: 'Average Score', data: [0], borderColor: 'rgb(75, 192, 192)', backgroundColor: 'rgba(75, 192, 192, 0.2)', tension: 0.1 }] }
+      };
+  }
+  
+  // Continue with calculations if results array is not empty
+  const testScores = { 'MCQ': [], 'Coding': [], 'Paragraph': [] };
+  const scoreDistributionCounts = { '0-20': 0, '21-40': 0, '41-60': 0, '61-80': 0, '81-100': 0 };
+  const testCompletions = { 'MCQ': 0, 'Coding': 0, 'Paragraph': 0 };
+
+  const getScoreRange = (score) => {
+    if (score <= 20) return '0-20';
+    if (score <= 40) return '21-40';
+    if (score <= 60) return '41-60';
+    if (score <= 80) return '61-80';
+    return '81-100';
+  };
+
+  results.forEach(result => {
+    if (testScores[result.testType]) {
+      testScores[result.testType].push(result.score);
+      testCompletions[result.testType]++;
+    }
+    const range = getScoreRange(result.score);
+    scoreDistributionCounts[range]++;
+  });
+
+  // Calculate Average Scores by Test Type
+  const testTypeLabels = ['MCQ', 'Coding', 'Paragraph'];
+  const avgScores = testTypeLabels.map(type => {
+    const scores = testScores[type];
+    if (scores.length === 0) return 0;
+    return Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length);
+  });
+
+  // Calculate Average Overall Score
+  const allScores = results.map(r => r.score);
+  const averageOverallScore = results.length > 0
+    ? Math.round(allScores.reduce((sum, score) => sum + score, 0) / results.length)
+    : 0;
+
+  // Calculate Pass Rate (assuming 60% is a pass)
+  const passRate = results.length > 0
+    ? Math.round((results.filter(r => r.score >= 60).length / results.length) * 100)
+    : 0;
+
+  // Total Unique Students
+  const uniqueStudentIds = [...new Set(results.map(r => r.studentId?._id))].length;
+  
+  // Combine into dashboard stats
+  const dashboardStats = {
+    totalStudents: uniqueStudentIds,
+    averageOverallScore: averageOverallScore,
+    testsCompleted: results.length,
+    passRate: passRate,
+  };
+
+  // --- Chart Data Structures ---
+
+  const testTypeChartData = {
+    labels: testTypeLabels,
+    datasets: [
+      {
+        label: 'Average Score (%)',
+        data: avgScores,
+        backgroundColor: [
+          'rgba(75, 192, 192, 0.8)', // MCQ
+          'rgba(54, 162, 235, 0.8)', // Coding
+          'rgba(255, 159, 64, 0.8)', // Paragraph
+        ],
+        borderColor: [
+          'rgb(75, 192, 192)',
+          'rgb(54, 162, 235)',
+          'rgb(255, 159, 64)',
+        ],
+        borderWidth: 1,
+      },
+    ],
+  };
+
+  const scoreDistributionChartData = {
+    labels: Object.keys(scoreDistributionCounts),
+    datasets: [
+      {
+        label: 'Number of Results',
+        data: Object.values(scoreDistributionCounts),
+        backgroundColor: [
+          'rgba(231, 76, 60, 0.8)', // Red (0-20)
+          'rgba(241, 196, 15, 0.8)', // Yellow (21-40)
+          'rgba(52, 152, 219, 0.8)', // Blue (41-60)
+          'rgba(46, 204, 113, 0.8)', // Green (61-80)
+          'rgba(155, 89, 182, 0.8)', // Purple (81-100)
+        ],
+        hoverOffset: 4
+      },
+    ],
+  };
+  
+  // Simple chronological trend data (requires date analysis, keeping placeholder logic simple for now)
+  const performanceTrendData = {
+    labels: ['Last 50 Tests'], // Simplified label for non-time-series data
+    datasets: [
+      {
+        label: 'Average Score',
+        data: [averageOverallScore], 
+        borderColor: 'rgb(75, 192, 192)',
+        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+        tension: 0.1,
+      },
+    ],
+  };
+
+  return {
+    dashboardStats,
+    testTypeChartData,
+    scoreDistributionChartData,
+    performanceTrendData
+  };
+};
+
+
 const AdminResults = () => {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +173,7 @@ const AdminResults = () => {
     student: ''
   });
   const [filteredResults, setFilteredResults] = useState([]);
+  const [chartData, setChartData] = useState(null); // State for processed chart data
 
   const fetchResults = async () => {
     try {
@@ -92,6 +230,9 @@ const AdminResults = () => {
     }
     
     setFilteredResults(filtered);
+    // PROCESS DATA FOR CHARTS/STATS
+    setChartData(processResultsForCharts(filtered)); 
+
   }, [results, filters]);
 
   useEffect(() => {
@@ -118,51 +259,35 @@ const AdminResults = () => {
     const values = results.map(result => result.studentId?.[key]).filter(Boolean);
     return [...new Set(values)].sort();
   };
-
-  const performanceData = {
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-    datasets: [
-      {
-        label: 'Average Score',
-        data: [75, 82, 78, 85, 90, 88],
-        borderColor: 'rgb(75, 192, 192)',
-        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-        tension: 0.1,
-      },
-    ],
+  
+  // Chart options (kept simple for consistency)
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'top' },
+    },
+    scales: {
+        y: {
+            beginAtZero: true,
+            max: 100,
+            title: {
+                display: true,
+                text: 'Score (%)'
+            }
+        }
+    }
+  };
+  
+  // Doughnut chart options, without y-axis scale
+  const doughnutOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        legend: { position: 'right' },
+    },
   };
 
-  const testTypeData = {
-    labels: ['MCQ', 'Coding', 'Paragraph'],
-    datasets: [
-      {
-        label: 'Test Completion Rate',
-        data: [85, 72, 68],
-        backgroundColor: [
-          'rgba(255, 99, 132, 0.8)',
-          'rgba(54, 162, 235, 0.8)',
-          'rgba(255, 205, 86, 0.8)',
-        ],
-      },
-    ],
-  };
-
-  const scoreDistributionData = {
-    labels: ['0-20', '21-40', '41-60', '61-80', '81-100'],
-    datasets: [
-      {
-        label: 'Students',
-        data: [5, 12, 25, 30, 18],
-        backgroundColor: [
-          'rgba(255, 99, 132, 0.8)',
-          'rgba(54, 162, 235, 0.8)',
-          'rgba(255, 205, 86, 0.8)',
-          'rgba(75, 192, 192, 0.8)',
-          'rgba(153, 102, 255, 0.8)',
-        ],
-      },
-    ],
-  };
 
   if (loading) {
     return (
@@ -179,10 +304,20 @@ const AdminResults = () => {
       </div>
     );
   }
+  
+  // Fallback if no data is present after loading
+  if (!chartData) {
+      return (
+      <div className="flex justify-center items-center h-64">
+          <div className="text-lg text-gray-500">No data available to display charts.</div>
+      </div>
+    );
+  }
+
 
   return (
     <div className="w-full h-full">
-      {/* Filters Section */}
+      {/* Filters Section (Keep as is) */}
       <div className="bg-white shadow-sm border-b p-4">
         <div className="flex flex-wrap gap-4 items-end">
           <div>
@@ -254,7 +389,7 @@ const AdminResults = () => {
         </div>
         
         <div className="mt-3 text-sm text-gray-600">
-          Showing {filteredResults.length} of {results.length} results
+          Showing {filteredResults.length} of {results.length} total results
         </div>
       </div>
 
@@ -266,53 +401,48 @@ const AdminResults = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
             <div className="bg-blue-50 p-4 rounded-lg">
               <h3 className="text-lg font-semibold text-blue-900">Total Students</h3>
-              <p className="text-3xl font-bold text-blue-600">{[...new Set(results.map(r => r.studentId?._id))].length}</p>
+              <p className="text-3xl font-bold text-blue-600">{chartData.dashboardStats.totalStudents}</p>
             </div>
             <div className="bg-green-50 p-4 rounded-lg">
               <h3 className="text-lg font-semibold text-green-900">Average Score</h3>
               <p className="text-3xl font-bold text-green-600">
-                {results.length > 0 
-                  ? `${Math.round(results.reduce((sum, r) => sum + r.score, 0) / results.length)}%`
-                  : 'N/A'
-                }
+                {chartData.dashboardStats.averageOverallScore}%
               </p>
             </div>
             <div className="bg-yellow-50 p-4 rounded-lg">
               <h3 className="text-lg font-semibold text-yellow-900">Tests Completed</h3>
-              <p className="text-3xl font-bold text-yellow-600">{results.length}</p>
+              <p className="text-3xl font-bold text-yellow-600">{chartData.dashboardStats.testsCompleted}</p>
             </div>
             <div className="bg-purple-50 p-4 rounded-lg">
-              <h3 className="text-lg font-semibold text-purple-900">Pass Rate</h3>
+              <h3 className="text-lg font-semibold text-purple-900">Pass Rate (>=60%)</h3>
               <p className="text-3xl font-bold text-purple-600">
-                {results.length > 0 
-                  ? `${Math.round((results.filter(r => r.score >= 60).length / results.length) * 100)}%`
-                  : 'N/A'
-                }
+                {chartData.dashboardStats.passRate}%
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white p-4 rounded-lg border">
-              <h3 className="text-lg font-semibold mb-4">Performance Trend</h3>
-              <Line data={performanceData} />
+            <div className="bg-white p-4 rounded-lg border h-80">
+              <h3 className="text-lg font-semibold mb-4">Average Score by Test Type</h3>
+              <Bar data={chartData.testTypeChartData} options={chartOptions} />
             </div>
-            <div className="bg-white p-4 rounded-lg border">
-              <h3 className="text-lg font-semibold mb-4">Test Type Performance</h3>
-              <Bar data={testTypeData} />
+            <div className="bg-white p-4 rounded-lg border h-80">
+              <h3 className="text-lg font-semibold mb-4">Overall Score Trend</h3>
+              {/* Note: This is currently based on the overall average, as full time-series data requires more backend logic. */}
+              <Line data={chartData.performanceTrendData} options={chartOptions} />
             </div>
             <div className="bg-white p-4 rounded-lg border lg:col-span-2">
               <h3 className="text-lg font-semibold mb-4">Score Distribution</h3>
-              <div className="flex justify-center">
-                <div className="w-96">
-                  <Doughnut data={scoreDistributionData} />
+              <div className="flex justify-center h-80">
+                <div className="w-full max-w-lg">
+                  <Doughnut data={chartData.scoreDistributionChartData} options={doughnutOptions} />
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Results Table */}
+        {/* Results Table (No change, uses filteredResults) */}
         <div className="bg-white shadow rounded-lg">
           <div className="px-6 py-4 border-b">
             <h3 className="text-lg font-semibold text-gray-900">Detailed Results</h3>
