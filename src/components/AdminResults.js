@@ -414,7 +414,7 @@ const AdminResults = () => {
               <p className="text-3xl font-bold text-yellow-600">{chartData.dashboardStats.testsCompleted}</p>
             </div>
             <div className="bg-purple-50 p-4 rounded-lg">
-              <h3 className="text-lg font-semibold text-purple-900">Pass Rate (>=60%)</h3>
+              <h3 className="text-lg font-semibold text-purple-900">Pass Rate ({'>'}=60%)</h3>
               <p className="text-3xl font-bold text-purple-600">
                 {chartData.dashboardStats.passRate}%
               </p>

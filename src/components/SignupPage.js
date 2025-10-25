@@ -256,7 +256,7 @@ const RegisterPage = () => {
                 required
               />
               <span className="checkmark"></span>
-              I agree to the <a href="#" className="terms-link">Terms of Service</a> and <a href="#" className="terms-link">Privacy Policy</a>
+              I agree to the <a href="/terms" className="terms-link">Terms of Service</a> and <a href="/privacy" className="terms-link">Privacy Policy</a>
             </label>
             {errors.terms && <span className="error-message">{errors.terms}</span>}
           </div>
