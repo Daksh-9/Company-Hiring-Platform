@@ -1,4 +1,5 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import axios from 'axios';
 import useExamGuard from '../../utils/useExamGuard';
 
 const CodingTest = () => {
@@ -40,91 +41,47 @@ const CodingTest = () => {
     }
   });
   const [selectedLanguage, setSelectedLanguage] = useState('javascript');
+  const [running, setRunning] = useState(false);
+  const [outputResult, setOutputResult] = useState(null);
+  const [problems, setProblems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [submissionResult, setSubmissionResult] = useState(null);
 
-  const problems = [
-    {
-      id: 1,
-      title: "Reverse a String",
-      description: "Write a function that takes a string as input and returns the string reversed.",
-      example: "Input: 'hello'\nOutput: 'olleh'",
-      testCases: [
-        { input: "'hello'", output: "'olleh'" },
-        { input: "'world'", output: "'dlrow'" },
-        { input: "'12345'", output: "'54321'" }
-      ],
-      starterCode: {
-        javascript: `function reverseString(str) {
-  // Your code here
-  
-}`,
-        python: `def reverse_string(s):
-    # Your code here
-    pass`,
-        java: `public class Solution {
-    public String reverseString(String str) {
-        // Your code here
-        return "";
-    }
-}`
+  // Language mapping with Judge0 IDs
+  const languageMap = {
+    python: { id: 71, name: 'Python' },
+    c: { id: 50, name: 'C' },
+    cpp: { id: 54, name: 'C++' },
+    java: { id: 62, name: 'Java' },
+    javascript: { id: 63, name: 'JavaScript' }
+  };
+
+  // Fetch coding questions from API
+  useEffect(() => {
+    const fetchCodingQuestions = async () => {
+      try {
+        const userToken = localStorage.getItem('userToken');
+        const response = await axios.get('/api/coding-questions', {
+          headers: {
+            'Authorization': `Bearer ${userToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        setProblems(response.data.questions);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching coding questions:', error);
+        setLoading(false);
       }
-    },
-    {
-      id: 2,
-      title: "Find Maximum Number",
-      description: "Write a function that finds the maximum number in an array.",
-      example: "Input: [3, 7, 2, 9, 1]\nOutput: 9",
-      testCases: [
-        { input: "[3, 7, 2, 9, 1]", output: "9" },
-        { input: "[-1, -5, -3]", output: "-1" },
-        { input: "[0, 0, 0]", output: "0" }
-      ],
-      starterCode: {
-        javascript: `function findMax(arr) {
-  // Your code here
-  
-}`,
-        python: `def find_max(arr):
-    # Your code here
-    pass`,
-        java: `public class Solution {
-    public int findMax(int[] arr) {
-        // Your code here
-        return 0;
-    }
-}`
-      }
-    },
-    {
-      id: 3,
-      title: "Check Palindrome",
-      description: "Write a function that checks if a string is a palindrome (reads the same forwards and backwards).",
-      example: "Input: 'racecar'\nOutput: true",
-      testCases: [
-        { input: "'racecar'", output: "true" },
-        { input: "'hello'", output: "false" },
-        { input: "'anna'", output: "true" }
-      ],
-      starterCode: {
-        javascript: `function isPalindrome(str) {
-  // Your code here
-  
-}`,
-        python: `def is_palindrome(s):
-    # Your code here
-    pass`,
-        java: `public class Solution {
-    public boolean isPalindrome(String str) {
-        // Your code here
-        return false;
-    }
-}`
-      }
-    }
-  ];
+    };
+
+    fetchCodingQuestions();
+  }, []);
 
   const handleStartTest = () => {
+    if (problems.length === 0) return;
     setIsTestStarted(true);
-    setCode(problems[0].starterCode[selectedLanguage]);
+    setCode(problems[0].starterCode?.[selectedLanguage] || '');
     
     // Start timer
     timerRef.current = setInterval(() => {
@@ -153,14 +110,18 @@ const CodingTest = () => {
   const handleNextProblem = () => {
     if (currentProblem < problems.length - 1) {
       setCurrentProblem(currentProblem + 1);
-      setCode(problems[currentProblem + 1].starterCode[selectedLanguage]);
+      setCode(problems[currentProblem + 1].starterCode?.[selectedLanguage] || '');
+      setSubmissionResult(null);
+      setOutputResult(null);
     }
   };
 
   const handlePreviousProblem = () => {
     if (currentProblem > 0) {
       setCurrentProblem(currentProblem - 1);
-      setCode(problems[currentProblem - 1].starterCode[selectedLanguage]);
+      setCode(problems[currentProblem - 1].starterCode?.[selectedLanguage] || '');
+      setSubmissionResult(null);
+      setOutputResult(null);
     }
   };
 
@@ -168,13 +129,105 @@ const CodingTest = () => {
     setSkippedProblems(prev => new Set(prev).add(currentProblem));
     if (currentProblem < problems.length - 1) {
       setCurrentProblem(currentProblem + 1);
-      setCode(problems[currentProblem + 1].starterCode[selectedLanguage]);
+      setCode(problems[currentProblem + 1].starterCode?.[selectedLanguage] || '');
+      setSubmissionResult(null);
+      setOutputResult(null);
     }
   };
 
   const handleLanguageChange = (language) => {
     setSelectedLanguage(language);
+    if (problems[currentProblem]?.starterCode?.[language]) {
     setCode(problems[currentProblem].starterCode[language]);
+    }
+  };
+
+  const handleSubmitSolution = async () => {
+    if (!code.trim()) {
+      setSubmissionResult({
+        success: false,
+        error: 'No code to submit'
+      });
+      return;
+    }
+
+    setRunning(true);
+    setSubmissionResult(null);
+
+    try {
+      const userToken = localStorage.getItem('userToken');
+      const languageId = languageMap[selectedLanguage]?.id;
+      const currentQuestion = problems[currentProblem];
+
+      if (!languageId || !currentQuestion) {
+        throw new Error('Invalid language or question selected');
+      }
+
+      const response = await axios.post('/api/submit-code', {
+        questionId: currentQuestion._id,
+        sourceCode: code,
+        language: selectedLanguage,
+        languageId: languageId
+      }, {
+        headers: {
+          'Authorization': `Bearer ${userToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      setSubmissionResult(response.data);
+    } catch (error) {
+      console.error('Code submission error:', error);
+      setSubmissionResult({
+        success: false,
+        error: error.response?.data?.message || error.message || 'Code submission failed'
+      });
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const handleRunCode = async () => {
+    if (!code.trim()) {
+      setOutputResult({
+        success: false,
+        error: 'No code to execute'
+      });
+      return;
+    }
+
+    setRunning(true);
+    setOutputResult(null);
+
+    try {
+      const userToken = localStorage.getItem('userToken');
+      const languageId = languageMap[selectedLanguage]?.id;
+
+      if (!languageId) {
+        throw new Error('Invalid language selected');
+      }
+
+      const response = await axios.post('/api/run', {
+        source_code: code,
+        language_id: languageId,
+        stdin: ''
+      }, {
+        headers: {
+          'Authorization': `Bearer ${userToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      setOutputResult(response.data);
+    } catch (error) {
+      console.error('Code execution error:', error);
+      setOutputResult({
+        success: false,
+        error: error.response?.data?.message || error.message || 'Code execution failed'
+      });
+    } finally {
+      setRunning(false);
+    }
   };
 
   const formatTime = (seconds) => {
@@ -182,6 +235,17 @@ const CodingTest = () => {
     const remainingSeconds = seconds % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <i className="fas fa-spinner fa-spin text-4xl text-blue-600 mb-4"></i>
+          <p className="text-lg">Loading coding questions...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!isTestStarted && !isTestCompleted) {
     return (
@@ -208,11 +272,12 @@ const CodingTest = () => {
               <li>Solve each coding problem within the time limit</li>
               <li>You can choose your preferred programming language</li>
               <li>Test your code with the provided test cases</li>
+              <li>Submit your solution to get real-time feedback</li>
               <li>Make sure your solution handles edge cases</li>
               <li>Timer will automatically submit when time runs out</li>
             </ul>
           </div>
-          <button className="btn btn-primary" onClick={handleStartTest}>
+          <button className="btn btn-primary" onClick={handleStartTest} disabled={problems.length === 0}>
             <i className="fas fa-play"></i>
             Start Test
           </button>
@@ -305,17 +370,23 @@ const CodingTest = () => {
         <div className="flex-1 p-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="problem-card">
             <h3 className="problem-title text-center lg:text-left">{currentP.title}</h3>
-            <p className="problem-description text-center lg:text-left">{currentP.description}</p>
-            <div className="problem-example">
-              <h4>Example:</h4>
-              <pre>{currentP.example}</pre>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-sm text-gray-600">Difficulty:</span>
+              <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                currentP.difficulty === 'Easy' ? 'bg-green-100 text-green-800' :
+                currentP.difficulty === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
+                'bg-red-100 text-red-800'
+              }`}>
+                {currentP.difficulty}
+              </span>
             </div>
+            <p className="problem-description text-center lg:text-left">{currentP.description}</p>
             <div className="test-cases">
               <h4>Test Cases:</h4>
-              {currentP.testCases.map((testCase, index) => (
+              {currentP.testCases?.map((testCase, index) => (
                 <div key={index} className="test-case">
                   <span className="test-input">Input: {testCase.input}</span>
-                  <span className="test-output">Output: {testCase.output}</span>
+                  <span className="test-output">Expected Output: {testCase.expectedOutput}</span>
                 </div>
               ))}
             </div>
@@ -329,15 +400,29 @@ const CodingTest = () => {
                   value={selectedLanguage} 
                   onChange={(e) => handleLanguageChange(e.target.value)}
                 >
-                  <option value="javascript">JavaScript</option>
-                  <option value="python">Python</option>
-                  <option value="java">Java</option>
+                  {Object.entries(languageMap).map(([key, lang]) => (
+                    <option key={key} value={key}>{lang.name}</option>
+                  ))}
                 </select>
               </div>
-              <button className="btn btn-secondary">
-                <i className="fas fa-play"></i>
-                Run Code
+              <div className="flex gap-2">
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={handleRunCode}
+                  disabled={running}
+                >
+                  <i className={`fas ${running ? 'fa-spinner fa-spin' : 'fa-play'}`}></i>
+                  {running ? 'Running...' : 'Run Code'}
+                </button>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={handleSubmitSolution}
+                  disabled={running}
+                >
+                  <i className={`fas ${running ? 'fa-spinner fa-spin' : 'fa-check'}`}></i>
+                  {running ? 'Submitting...' : 'Submit Solution'}
               </button>
+              </div>
             </div>
             <div className="code-editor">
               <textarea
@@ -348,9 +433,122 @@ const CodingTest = () => {
               />
             </div>
             <div className="output-panel">
-              <h4>Output:</h4>
+              <h4>Results:</h4>
               <div className="output-content">
-                <p>Click "Run Code" to test your solution</p>
+                {running ? (
+                  <div className="flex items-center justify-center p-4">
+                    <i className="fas fa-spinner fa-spin mr-2"></i>
+                    <span>Processing...</span>
+                  </div>
+                ) : submissionResult ? (
+                  <div className="space-y-3">
+                    {submissionResult.success ? (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-600 font-semibold">Submission Status:</span>
+                          <span className="text-green-600">{submissionResult.realTimeFeedback.status}</span>
+                        </div>
+                        
+                        <div className="bg-gray-50 p-3 rounded">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="font-semibold">Test Results:</span>
+                            <span className="text-lg font-bold">
+                              {submissionResult.realTimeFeedback.passed}/{submissionResult.realTimeFeedback.total}
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                              style={{ width: `${submissionResult.realTimeFeedback.score}%` }}
+                            ></div>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1">Score: {submissionResult.realTimeFeedback.score}%</p>
+                        </div>
+                        
+                        {submissionResult.testResults?.map((test, index) => (
+                          <div key={index} className={`p-2 rounded text-sm ${
+                            test.passed ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                          }`}>
+                            <div className="flex items-center gap-2 mb-1">
+                              <i className={`fas ${test.passed ? 'fa-check text-green-600' : 'fa-times text-red-600'}`}></i>
+                              <span className="font-semibold">Test Case {index + 1}</span>
+                              <span className={`text-xs px-2 py-1 rounded ${
+                                test.passed ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                              }`}>
+                                {test.passed ? 'PASSED' : 'FAILED'}
+                              </span>
+                            </div>
+                            {!test.passed && (
+                              <div className="text-xs text-gray-600">
+                                <p>Expected: {test.expectedOutput}</p>
+                                <p>Got: {test.actualOutput || 'No output'}</p>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </>
+                    ) : (
+                      <div className="text-red-600">
+                        <span className="font-semibold">Error:</span>
+                        <p className="mt-1">{submissionResult.error}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : outputResult ? (
+                  <div className="space-y-3">
+                    {outputResult.success ? (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-600 font-semibold">Status:</span>
+                          <span className="text-green-600">{outputResult.status?.description || 'Completed'}</span>
+                        </div>
+                        
+                        {outputResult.stdout && (
+                          <div>
+                            <span className="font-semibold text-gray-700">Output:</span>
+                            <pre className="bg-gray-100 p-2 rounded text-sm mt-1 whitespace-pre-wrap">
+                              {outputResult.stdout}
+                            </pre>
+                          </div>
+                        )}
+                        
+                        {outputResult.stderr && (
+                          <div>
+                            <span className="font-semibold text-red-600">Error:</span>
+                            <pre className="bg-red-50 p-2 rounded text-sm mt-1 whitespace-pre-wrap text-red-600">
+                              {outputResult.stderr}
+                            </pre>
+                          </div>
+                        )}
+                        
+                        {outputResult.compile_output && (
+                          <div>
+                            <span className="font-semibold text-yellow-600">Compile Output:</span>
+                            <pre className="bg-yellow-50 p-2 rounded text-sm mt-1 whitespace-pre-wrap text-yellow-700">
+                              {outputResult.compile_output}
+                            </pre>
+                          </div>
+                        )}
+                        
+                        <div className="flex gap-4 text-sm text-gray-600">
+                          {outputResult.time && (
+                            <span>Time: {outputResult.time}s</span>
+                          )}
+                          {outputResult.memory && (
+                            <span>Memory: {outputResult.memory}KB</span>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-red-600">
+                        <span className="font-semibold">Error:</span>
+                        <p className="mt-1">{outputResult.error}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p>Click "Run Code" to test your solution or "Submit Solution" for full evaluation</p>
+                )}
               </div>
             </div>
           </div>
