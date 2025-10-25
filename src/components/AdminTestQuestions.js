@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Toast from './Toast';
 
 const AdminTestQuestions = () => {
   const [file, setFile] = useState(null);
@@ -8,6 +9,13 @@ const AdminTestQuestions = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  
+  // New states for coding questions upload
+  const [codingFile, setCodingFile] = useState(null);
+  const [uploadingCoding, setUploadingCoding] = useState(false);
+  
+  // Toast notification states
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     fetchQuestions();
@@ -46,6 +54,17 @@ const AdminTestQuestions = () => {
     }
   };
 
+  const handleCodingFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (selectedFile && selectedFile.type === 'text/csv') {
+      setCodingFile(selectedFile);
+      setError('');
+    } else {
+      setError('Please select a valid CSV file');
+      setCodingFile(null);
+    }
+  };
+
   const handleUpload = async (e) => {
     e.preventDefault();
     if (!file) {
@@ -74,15 +93,61 @@ const AdminTestQuestions = () => {
 
       if (response.ok) {
         setSuccess(`Successfully uploaded ${data.count} questions`);
+        setToast({ message: `Questions uploaded successfully! ${data.count} questions added.`, type: 'success' });
         setFile(null);
         fetchQuestions(); // Refresh the questions list
       } else {
         setError(data.message || 'Upload failed');
+        setToast({ message: data.message || 'Upload failed', type: 'error' });
       }
     } catch (err) {
       setError('Network error during upload');
+      setToast({ message: 'Network error during upload', type: 'error' });
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleCodingUpload = async (e) => {
+    e.preventDefault();
+    if (!codingFile) {
+      setError('Please select a coding questions file');
+      return;
+    }
+
+    setUploadingCoding(true);
+    setError('');
+    setSuccess('');
+
+    const formData = new FormData();
+    formData.append('csvFile', codingFile);
+
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch('/api/admin/upload-coding-questions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccess(`Coding questions uploaded successfully! ${data.count} questions added.`);
+        setToast({ message: `Coding questions uploaded successfully! ${data.count} questions added.`, type: 'success' });
+        setCodingFile(null);
+        fetchQuestions(); // Refresh the questions list
+      } else {
+        setError(data.message || 'Coding questions upload failed');
+        setToast({ message: data.message || 'Coding questions upload failed', type: 'error' });
+      }
+    } catch (err) {
+      setError('Network error during coding questions upload');
+      setToast({ message: 'Network error during coding questions upload', type: 'error' });
+    } finally {
+      setUploadingCoding(false);
     }
   };
 
@@ -135,6 +200,21 @@ const AdminTestQuestions = () => {
     window.URL.revokeObjectURL(url);
   };
 
+  const downloadCodingTemplate = () => {
+    const csvContent = `title,description,language_id,difficulty,input1,expected_output1,input2,expected_output2,input3,expected_output3
+"Reverse String","Write a function that reverses a string",71,"Easy","hello","olleh","world","dlrow","test","tset"
+"Find Maximum","Find the maximum number in an array",50,"Easy","3 7 2 9 1","9","-1 -5 -3","-1","0 0 0","0"
+"Palindrome Check","Check if a string is a palindrome",63,"Medium","racecar","true","hello","false","anna","true"`;
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'coding_questions_template.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -145,6 +225,15 @@ const AdminTestQuestions = () => {
 
   return (
     <div className="w-full h-full">
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+      
       {/* Upload Section */}
       <div className="bg-white shadow rounded-lg p-6 mb-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-6">Upload Test Questions</h2>
@@ -155,6 +244,12 @@ const AdminTestQuestions = () => {
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium"
           >
             Download CSV Template
+          </button>
+          <button
+            onClick={downloadCodingTemplate}
+            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+          >
+            Download Coding Template
           </button>
            {/* New delete button */}
           <button
@@ -199,6 +294,36 @@ const AdminTestQuestions = () => {
             {uploading ? 'Uploading...' : 'Upload Questions'}
           </button>
         </form>
+
+        {/* Coding Questions Upload Section */}
+        <div className="mt-8 pt-8 border-t border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Upload Coding Questions</h3>
+          
+          <form onSubmit={handleCodingUpload} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Coding Questions CSV File
+              </label>
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleCodingFileChange}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                CSV format: title, description, language_id, difficulty, input1, expected_output1, input2, expected_output2, ...
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={!codingFile || uploadingCoding}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50"
+            >
+              {uploadingCoding ? 'Uploading...' : 'Upload Code'}
+            </button>
+          </form>
+        </div>
       </div>
 
       {/* Questions List */}
