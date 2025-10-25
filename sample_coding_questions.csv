@@ -1,0 +1,7 @@
+title,description,language_id,difficulty,input1,expected_output1,input2,expected_output2,input3,expected_output3
+"Reverse String","Write a function that reverses a string",71,"Easy","hello","olleh","world","dlrow","test","tset"
+"Find Maximum","Find the maximum number in an array",50,"Easy","3 7 2 9 1","9","-1 -5 -3","-1","0 0 0","0"
+"Palindrome Check","Check if a string is a palindrome",63,"Medium","racecar","true","hello","false","anna","true"
+"Sum of Array","Calculate the sum of all elements in an array",54,"Easy","1 2 3 4 5","15","10 20 30","60","0 0 0","0"
+"Factorial","Calculate the factorial of a number",62,"Easy","5","120","3","6","0","1"
+
