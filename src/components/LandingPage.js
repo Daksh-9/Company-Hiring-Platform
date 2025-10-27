@@ -13,7 +13,7 @@ const LandingPage = () => {
           <Link to="/register" className="btn-nav primary">Register</Link>
         </div>
       </nav>
-      
+
       <section className="hero-section">
         <div className="hero-content">
           <h1>Find Your Dream Job</h1>
@@ -30,7 +30,7 @@ const LandingPage = () => {
           </div>
         </div>
       </section>
-      
+
       <section className="features-section">
         <div className="features-grid">
           <div className="feature-card">
@@ -40,7 +40,7 @@ const LandingPage = () => {
             <h3>Smart Job Search</h3>
             <p>Find the perfect job with our intelligent matching algorithm that considers your skills, experience, and preferences.</p>
           </div>
-          
+
           <div className="feature-card">
             <div className="feature-icon">
               <i className="fas fa-building"></i>
@@ -48,7 +48,7 @@ const LandingPage = () => {
             <h3>Top Companies</h3>
             <p>Connect with leading companies from various industries and discover opportunities that align with your career goals.</p>
           </div>
-          
+
           <div className="feature-card">
             <div className="feature-icon">
               <i className="fas fa-chart-line"></i>
@@ -81,4 +81,4 @@ const LandingPage = () => {
   );
 };
 
-export default LandingPage; 
+export default LandingPage;
