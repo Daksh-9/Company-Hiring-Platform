@@ -12,10 +12,16 @@ const nodemailer = require('nodemailer');
 const path = require('path');
 const fs = require('fs');
 const cookieParser = require('cookie-parser');
+
 const crypto = require('crypto'); // Keep for password generation
+const axios = require('axios');
+
 
 const app = express();
 const PORT = process.env.PORT || 5001;
+
+// Judge0 API Configuration
+const JUDGE0_API_BASE_URL = 'http://172.25.202.101:2358';
 
 // Middleware
 app.use(cors({
@@ -166,7 +172,60 @@ const questionSchema = new mongoose.Schema({
 
 const Question = mongoose.model('Question', questionSchema);
 
-// REMOVED RegistrationToken Schema
+
+// Coding Question Schema
+const codingQuestionSchema = new mongoose.Schema({
+    title: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    description: {
+        type: String,
+        required: true
+    },
+    difficulty: {
+        type: String,
+        enum: ['Easy', 'Medium', 'Hard'],
+        default: 'Easy'
+    },
+    timeLimit: {
+        type: Number, // in seconds
+        default: 30
+    },
+    memoryLimit: {
+        type: Number, // in KB
+        default: 256000
+    },
+    testCases: [{
+        input: {
+            type: String,
+            required: true
+        },
+        expectedOutput: {
+            type: String,
+            required: true
+        },
+        isHidden: {
+            type: Boolean,
+            default: false
+        }
+    }],
+    starterCode: {
+        python: String,
+        c: String,
+        cpp: String,
+        java: String,
+        javascript: String
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now
+    }
+});
+
+const CodingQuestion = mongoose.model('CodingQuestion', codingQuestionSchema);
+
 
 // Result Schema
 const resultSchema = new mongoose.Schema({
@@ -195,6 +254,61 @@ const resultSchema = new mongoose.Schema({
 });
 
 const Result = mongoose.model('Result', resultSchema);
+
+// Coding Submission Schema
+const codingSubmissionSchema = new mongoose.Schema({
+    studentId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
+    questionId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'CodingQuestion',
+        required: true
+    },
+    sourceCode: {
+        type: String,
+        required: true
+    },
+    language: {
+        type: String,
+        required: true
+    },
+    languageId: {
+        type: Number,
+        required: true
+    },
+    testResults: [{
+        testCaseIndex: Number,
+        input: String,
+        expectedOutput: String,
+        actualOutput: String,
+        passed: Boolean,
+        executionTime: Number,
+        memoryUsed: Number,
+        error: String
+    }],
+    overallResult: {
+        totalTestCases: Number,
+        passedTestCases: Number,
+        failedTestCases: Number,
+        score: Number, // percentage
+        executionTime: Number,
+        memoryUsed: Number
+    },
+    status: {
+        type: String,
+        enum: ['Pending', 'Running', 'Completed', 'Failed'],
+        default: 'Pending'
+    },
+    submittedAt: {
+        type: Date,
+        default: Date.now
+    }
+});
+
+const CodingSubmission = mongoose.model('CodingSubmission', codingSubmissionSchema);
 
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -454,6 +568,273 @@ app.post('/api/test-result', authenticateToken, async (req, res) => {
     }
 });
 
+// Student Coding Questions
+app.get('/api/coding-questions', authenticateToken, async (req, res) => {
+    try {
+        const questions = await CodingQuestion.find().select('-testCases.isHidden');
+        res.json({ questions });
+    } catch (error) {
+        console.error('Error fetching coding questions:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+app.get('/api/coding-questions/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const question = await CodingQuestion.findById(id).select('-testCases.isHidden');
+        
+        if (!question) {
+            return res.status(404).json({ message: 'Coding question not found' });
+        }
+        
+        res.json({ question });
+    } catch (error) {
+        console.error('Error fetching coding question:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Judge0 Code Execution Route
+app.post('/api/run', authenticateToken, async (req, res) => {
+    try {
+        const { source_code, language_id, stdin } = req.body;
+
+        // Validate required fields
+        if (!source_code || !language_id) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: source_code and language_id are required'
+            });
+        }
+
+        console.log('🚀 Executing code with Judge0...');
+        console.log('📝 Language ID:', language_id);
+        console.log('📄 Source code length:', source_code.length);
+
+        // Prepare submission data for Judge0
+        const submissionData = {
+            source_code: source_code,
+            language_id: parseInt(language_id),
+            stdin: stdin || '',
+            base64_encoded: false
+        };
+
+        // Send request to Judge0 API
+        const response = await axios.post(
+            `${JUDGE0_API_BASE_URL}/submissions?base64_encoded=false&wait=true`,
+            submissionData,
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                timeout: 30000 // 30 second timeout
+            }
+        );
+
+        console.log('✅ Judge0 execution completed');
+        console.log('📊 Status:', response.data.status?.description || 'Unknown');
+
+        // Return Judge0 response with all execution details
+        res.json({
+            success: true,
+            stdout: response.data.stdout || '',
+            stderr: response.data.stderr || '',
+            compile_output: response.data.compile_output || '',
+            status: response.data.status || {},
+            time: response.data.time || '',
+            memory: response.data.memory || ''
+        });
+
+    } catch (error) {
+        console.error('❌ Code execution error:', error.message);
+        
+        // Handle different types of errors
+        if (error.code === 'ECONNREFUSED') {
+            return res.status(503).json({
+                success: false,
+                error: 'Judge0 service is unavailable',
+                message: 'Code execution service is currently down. Please try again later.'
+            });
+        }
+        
+        if (error.code === 'ETIMEDOUT') {
+            return res.status(504).json({
+                success: false,
+                error: 'Request timeout',
+                message: 'Code execution took too long. Please try with simpler code.'
+            });
+        }
+
+        if (error.response) {
+            // Judge0 API returned an error
+            return res.status(error.response.status).json({
+                success: false,
+                error: 'Judge0 API error',
+                message: error.response.data?.message || 'Code execution failed',
+                details: error.response.data
+            });
+        }
+
+        // Generic error
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+            message: 'An unexpected error occurred during code execution'
+        });
+    }
+});
+
+// Submit and Test Code Solution
+app.post('/api/submit-code', authenticateToken, async (req, res) => {
+    try {
+        const { questionId, sourceCode, language, languageId } = req.body;
+        
+        // Get the coding question with all test cases
+        const question = await CodingQuestion.findById(questionId);
+        if (!question) {
+            return res.status(404).json({ message: 'Coding question not found' });
+        }
+        
+        // Create submission record
+        const submission = new CodingSubmission({
+            studentId: req.user.userId,
+            questionId,
+            sourceCode,
+            language,
+            languageId,
+            status: 'Running'
+        });
+        await submission.save();
+        
+        // Test against all test cases
+        const testResults = [];
+        let passedTestCases = 0;
+        let totalExecutionTime = 0;
+        let maxMemoryUsed = 0;
+        
+        for (let i = 0; i < question.testCases.length; i++) {
+            const testCase = question.testCases[i];
+            
+            try {
+                // Execute code with test case input
+                const response = await axios.post(
+                    `${JUDGE0_API_BASE_URL}/submissions?base64_encoded=false&wait=true`,
+                    {
+                        source_code: sourceCode,
+                        language_id: languageId,
+                        stdin: testCase.input,
+                        base64_encoded: false
+                    },
+                    {
+                        headers: { 'Content-Type': 'application/json' },
+                        timeout: question.timeLimit * 1000
+                    }
+                );
+                
+                const actualOutput = response.data.stdout?.trim() || '';
+                const expectedOutput = testCase.expectedOutput.trim();
+                const passed = actualOutput === expectedOutput;
+                
+                if (passed) passedTestCases++;
+                
+                testResults.push({
+                    testCaseIndex: i,
+                    input: testCase.input,
+                    expectedOutput: testCase.expectedOutput,
+                    actualOutput: actualOutput,
+                    passed: passed,
+                    executionTime: parseFloat(response.data.time) || 0,
+                    memoryUsed: parseInt(response.data.memory) || 0,
+                    error: response.data.stderr || response.data.compile_output || ''
+                });
+                
+                totalExecutionTime += parseFloat(response.data.time) || 0;
+                maxMemoryUsed = Math.max(maxMemoryUsed, parseInt(response.data.memory) || 0);
+                
+            } catch (error) {
+                testResults.push({
+                    testCaseIndex: i,
+                    input: testCase.input,
+                    expectedOutput: testCase.expectedOutput,
+                    actualOutput: '',
+                    passed: false,
+                    executionTime: 0,
+                    memoryUsed: 0,
+                    error: error.message || 'Execution failed'
+                });
+            }
+        }
+        
+        // Calculate overall result
+        const score = Math.round((passedTestCases / question.testCases.length) * 100);
+        const overallResult = {
+            totalTestCases: question.testCases.length,
+            passedTestCases: passedTestCases,
+            failedTestCases: question.testCases.length - passedTestCases,
+            score: score,
+            executionTime: totalExecutionTime,
+            memoryUsed: maxMemoryUsed
+        };
+        
+        // Update submission with results
+        submission.testResults = testResults;
+        submission.overallResult = overallResult;
+        submission.status = 'Completed';
+        await submission.save();
+        
+        res.json({
+            success: true,
+            submissionId: submission._id,
+            testResults: testResults,
+            overallResult: overallResult,
+            realTimeFeedback: {
+                passed: passedTestCases,
+                total: question.testCases.length,
+                score: score,
+                status: score === 100 ? 'All tests passed!' : `${passedTestCases}/${question.testCases.length} tests passed`
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error submitting code:', error);
+        res.status(500).json({ 
+            success: false,
+            message: 'Error processing code submission',
+            error: error.message 
+        });
+    }
+});
+
+// Get coding submissions for admin
+app.get('/api/admin/coding-submissions', authenticateToken, async (req, res) => {
+    try {
+        const submissions = await CodingSubmission.find()
+            .populate('studentId', 'firstName lastName email')
+            .populate('questionId', 'title difficulty')
+            .sort({ submittedAt: -1 });
+        
+        res.json({ submissions });
+    } catch (error) {
+        console.error('Error fetching coding submissions:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Get student's coding submissions
+app.get('/api/coding-submissions', authenticateToken, async (req, res) => {
+    try {
+        const submissions = await CodingSubmission.find({ studentId: req.user.userId })
+            .populate('questionId', 'title difficulty')
+            .sort({ submittedAt: -1 });
+        
+        res.json({ submissions });
+    } catch (error) {
+        console.error('Error fetching student coding submissions:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 
 // Admin Routes
 app.post('/api/admin/login', async (req, res) => {
@@ -519,6 +900,165 @@ app.delete('/api/admin/questions', authenticateToken, async (req, res) => {
         res.json({ message: `Successfully deleted ${result.deletedCount} questions.` });
     } catch (error) {
         console.error('Error deleting questions:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Admin Coding Questions Management
+app.get('/api/admin/coding-questions', authenticateToken, async (req, res) => {
+    try {
+        const questions = await CodingQuestion.find().sort({ createdAt: -1 });
+        res.json({ questions });
+    } catch (error) {
+        console.error('Error fetching coding questions:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+app.post('/api/admin/coding-questions', authenticateToken, async (req, res) => {
+    try {
+        const { title, description, difficulty, timeLimit, memoryLimit, testCases, starterCode } = req.body;
+        
+        const newQuestion = new CodingQuestion({
+            title,
+            description,
+            difficulty,
+            timeLimit,
+            memoryLimit,
+            testCases,
+            starterCode
+        });
+        
+        await newQuestion.save();
+        res.status(201).json({ message: 'Coding question created successfully', question: newQuestion });
+    } catch (error) {
+        console.error('Error creating coding question:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+app.put('/api/admin/coding-questions/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updatedQuestion = await CodingQuestion.findByIdAndUpdate(id, req.body, { new: true });
+        
+        if (!updatedQuestion) {
+            return res.status(404).json({ message: 'Coding question not found' });
+        }
+        
+        res.json({ message: 'Coding question updated successfully', question: updatedQuestion });
+    } catch (error) {
+        console.error('Error updating coding question:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+app.delete('/api/admin/coding-questions/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const deletedQuestion = await CodingQuestion.findByIdAndDelete(id);
+        
+        if (!deletedQuestion) {
+            return res.status(404).json({ message: 'Coding question not found' });
+        }
+        
+        res.json({ message: 'Coding question deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting coding question:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Upload coding questions via CSV
+app.post('/api/admin/upload-coding-questions', authenticateToken, upload.single('csvFile'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+
+        const questions = [];
+        const errors = [];
+
+        fs.createReadStream(req.file.path)
+            .pipe(csv())
+            .on('data', (data) => {
+                try {
+                    // Extract test cases from the CSV row
+                    const testCases = [];
+                    let testCaseIndex = 1;
+                    
+                    // Look for input/expected_output pairs
+                    while (data[`input${testCaseIndex}`] && data[`expected_output${testCaseIndex}`]) {
+                        testCases.push({
+                            input: data[`input${testCaseIndex}`].trim(),
+                            expectedOutput: data[`expected_output${testCaseIndex}`].trim(),
+                            isHidden: false
+                        });
+                        testCaseIndex++;
+                    }
+
+                    if (testCases.length === 0) {
+                        errors.push(`Row with title "${data.title}" has no test cases`);
+                        return;
+                    }
+
+                    // Create starter code based on language_id
+                    const languageId = parseInt(data.language_id);
+                    const starterCode = {
+                        python: languageId === 71 ? `def solution():\n    # Your code here\n    pass` : '',
+                        c: languageId === 50 ? `#include <stdio.h>\n\nint main() {\n    // Your code here\n    return 0;\n}` : '',
+                        cpp: languageId === 54 ? `#include <iostream>\nusing namespace std;\n\nint main() {\n    // Your code here\n    return 0;\n}` : '',
+                        java: languageId === 62 ? `public class Solution {\n    public static void main(String[] args) {\n        // Your code here\n    }\n}` : '',
+                        javascript: languageId === 63 ? `function solution() {\n    // Your code here\n}` : ''
+                    };
+
+                    const question = new CodingQuestion({
+                        title: data.title.trim(),
+                        description: data.description.trim(),
+                        difficulty: data.difficulty || 'Easy',
+                        timeLimit: 30,
+                        memoryLimit: 256000,
+                        testCases: testCases,
+                        starterCode: starterCode
+                    });
+                    
+                    questions.push(question);
+                } catch (error) {
+                    errors.push(`Error processing row with title "${data.title}": ${error.message}`);
+                }
+            })
+            .on('end', async () => {
+                try {
+                    if (questions.length === 0) {
+                        fs.unlinkSync(req.file.path);
+                        return res.status(400).json({ 
+                            message: 'No valid questions found in CSV',
+                            errors: errors
+                        });
+                    }
+
+                    await CodingQuestion.insertMany(questions);
+                    fs.unlinkSync(req.file.path); // Delete uploaded file
+                    
+                    res.json({
+                        message: 'Coding questions uploaded successfully!',
+                        count: questions.length,
+                        errors: errors.length > 0 ? errors : undefined
+                    });
+                } catch (error) {
+                    console.error('Error saving coding questions:', error);
+                    res.status(500).json({ 
+                        message: 'Error saving coding questions',
+                        error: error.message 
+                    });
+                }
+            })
+            .on('error', (error) => {
+                console.error('CSV parsing error:', error);
+                res.status(500).json({ message: 'Error parsing CSV file' });
+            });
+    } catch (error) {
+        console.error('Error uploading coding questions:', error);
         res.status(500).json({ message: 'Internal server error' });
     }
 });
