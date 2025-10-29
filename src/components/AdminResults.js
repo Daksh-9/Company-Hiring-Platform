@@ -110,9 +110,19 @@ const processResultsForCharts = (results) => {
   };
 
   results.forEach((result) => {
-    if (testScores[result.testType]) {
-      testScores[result.testType].push(result.score);
-      testCompletions[result.testType]++;
+    // Normalize test type to match exact casing
+    const testType =
+      result.testType === "MCQ"
+        ? "MCQ"
+        : result.testType === "Coding"
+        ? "Coding"
+        : result.testType === "Paragraph"
+        ? "Paragraph"
+        : null;
+
+    if (testType && testScores[testType]) {
+      testScores[testType].push(result.score);
+      testCompletions[testType]++;
     }
     const range = getScoreRange(result.score);
     scoreDistributionCounts[range]++;
@@ -244,15 +254,19 @@ const AdminResults = () => {
         },
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setResults(data.results);
-      } else {
-        const data = await response.json();
-        setError(`Failed to fetch results: ${data.message}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch results. Status: ${response.status}`);
       }
+
+      const data = await response.json();
+      if (!data || !Array.isArray(data.results)) {
+        throw new Error("Invalid data format received from server");
+      }
+
+      setResults(data.results);
     } catch (err) {
-      setError("Network error");
+      console.error("Error fetching results:", err);
+      setError(err.message || "Failed to fetch results");
     } finally {
       setLoading(false);
     }
@@ -364,143 +378,165 @@ const AdminResults = () => {
 
   // Add this new function to process consolidated results
   const getConsolidatedResults = (results) => {
-    const studentResults = results.reduce((acc, result) => {
-      const studentId = result.studentId?._id;
-      if (!studentId) return acc;
+    try {
+      const studentResults = results.reduce((acc, result) => {
+        const studentId = result.studentId?._id;
+        if (!studentId) return acc;
 
-      if (!acc[studentId]) {
-        acc[studentId] = {
-          studentId: result.studentId,
-          mcqScore: null,
-          codingScore: null,
-          paragraphScore: null,
-          lastTestDate: result.completedAt,
-        };
-      }
+        if (!acc[studentId]) {
+          acc[studentId] = {
+            studentId: result.studentId,
+            mcqScore: null,
+            codingScore: null,
+            paragraphScore: null,
+            lastTestDate: result.completedAt,
+          };
+        }
 
-      // Update scores based on test type
-      switch (result.testType) {
-        case "MCQ":
-          if (
-            !acc[studentId].mcqScore ||
-            result.score > acc[studentId].mcqScore
-          ) {
-            acc[studentId].mcqScore = result.score;
-          }
-          break;
-        case "Coding":
-          if (
-            !acc[studentId].codingScore ||
-            result.score > acc[studentId].codingScore
-          ) {
-            acc[studentId].codingScore = result.score;
-          }
-          break;
-        case "Paragraph":
-          if (
-            !acc[studentId].paragraphScore ||
-            result.score > acc[studentId].paragraphScore
-          ) {
-            acc[studentId].paragraphScore = result.score;
-          }
-          break;
-      }
+        // Normalize test type and update scores
+        const testType = result.testType;
+        const score = result.score;
 
-      // Update last test date if this test is more recent
-      if (
-        new Date(result.completedAt) > new Date(acc[studentId].lastTestDate)
-      ) {
-        acc[studentId].lastTestDate = result.completedAt;
-      }
+        if (
+          testType === "MCQ" &&
+          (!acc[studentId].mcqScore || score > acc[studentId].mcqScore)
+        ) {
+          acc[studentId].mcqScore = score;
+        } else if (
+          testType === "Coding" &&
+          (!acc[studentId].codingScore || score > acc[studentId].codingScore)
+        ) {
+          acc[studentId].codingScore = score;
+        } else if (
+          testType === "Paragraph" &&
+          (!acc[studentId].paragraphScore ||
+            score > acc[studentId].paragraphScore)
+        ) {
+          acc[studentId].paragraphScore = score;
+        }
 
-      return acc;
-    }, {});
+        // Update last test date if more recent
+        const currentDate = new Date(result.completedAt);
+        const existingDate = new Date(acc[studentId].lastTestDate);
+        if (currentDate > existingDate) {
+          acc[studentId].lastTestDate = result.completedAt;
+        }
 
-    return Object.values(studentResults);
+        return acc;
+      }, {});
+
+      return Object.values(studentResults);
+    } catch (error) {
+      console.error("Error processing results:", error);
+      return [];
+    }
   };
 
   // Replace the existing detailed results table with this
-  const renderDetailedResults = () => (
-    <div className="bg-white shadow rounded-lg">
-      <div className="px-6 py-4 border-b">
-        <h3 className="text-lg font-semibold text-gray-900">
-          Student Performance Summary
-        </h3>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Student Name
-              </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                MCQ Score
-              </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Coding Score
-              </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Paragraph Score
-              </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Last Test Date
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {getConsolidatedResults(filteredResults).map((student) => (
-              <tr key={student.studentId._id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-center">
-                  <div className="text-sm font-medium text-gray-900">
-                    {student.studentId?.firstName} {student.studentId?.lastName}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-center">
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                      student.mcqScore >= 70
-                        ? "bg-green-100 text-green-800"
-                        : "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    {student.mcqScore ? `${student.mcqScore}%` : "N/A"}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-center">
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                      student.codingScore >= 33
-                        ? "bg-green-100 text-green-800"
-                        : "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    {student.codingScore ? `${student.codingScore}%` : "N/A"}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-center">
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                      student.paragraphScore >= 60
-                        ? "bg-green-100 text-green-800"
-                        : "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    {student.paragraphScore
-                      ? `${student.paragraphScore}%`
-                      : "N/A"}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
-                  {new Date(student.lastTestDate).toLocaleDateString()}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+  const renderDetailedResults = () => {
+    try {
+      const consolidatedResults = getConsolidatedResults(filteredResults);
+      if (!consolidatedResults.length) {
+        return (
+          <div className="text-center p-8 text-gray-500">
+            No results found for the selected filters
+          </div>
+        );
+      }
+
+      return (
+        <div className="bg-white shadow rounded-lg">
+          <div className="px-6 py-4 border-b">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Student Performance Summary
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Student Name
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    MCQ Score
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Coding Score
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Paragraph Score
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Last Test Date
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {consolidatedResults.map((student) => (
+                  <tr key={student.studentId._id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <div className="text-sm font-medium text-gray-900">
+                        {student.studentId?.firstName}{" "}
+                        {student.studentId?.lastName}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                          student.mcqScore >= 70
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {student.mcqScore ? `${student.mcqScore}%` : "N/A"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                          student.codingScore >= 33
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {student.codingScore
+                          ? `${student.codingScore}%`
+                          : "N/A"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                          student.paragraphScore >= 60
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {student.paragraphScore
+                          ? `${student.paragraphScore}%`
+                          : "N/A"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                      {new Date(student.lastTestDate).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    } catch (error) {
+      console.error("Error rendering results:", error);
+      return (
+        <div className="text-center p-8 text-red-500">
+          Error displaying results. Please try refreshing the page.
+        </div>
+      );
+    }
+  };
 
   return (
     <div className="w-full h-full">

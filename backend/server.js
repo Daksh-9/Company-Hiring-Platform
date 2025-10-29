@@ -12,7 +12,10 @@ const nodemailer = require('nodemailer');
 const path = require('path');
 const fs = require('fs');
 const cookieParser = require('cookie-parser');
+
+const crypto = require('crypto'); // Keep for password generation
 const axios = require('axios');
+
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -169,6 +172,7 @@ const questionSchema = new mongoose.Schema({
 
 const Question = mongoose.model('Question', questionSchema);
 
+
 // Coding Question Schema
 const codingQuestionSchema = new mongoose.Schema({
     title: {
@@ -221,6 +225,7 @@ const codingQuestionSchema = new mongoose.Schema({
 });
 
 const CodingQuestion = mongoose.model('CodingQuestion', codingQuestionSchema);
+
 
 // Result Schema
 const resultSchema = new mongoose.Schema({
@@ -362,78 +367,110 @@ transporter.verify((error, success) => {
 });
 
 // API Routes (backend)
+// Function to generate a random alphanumeric string
+function generateRandomString(length) {
+    // Using crypto for better randomness and including alphanumeric characters
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    const charactersLength = characters.length;
+    // Generate cryptographically secure random bytes
+    const randomBytes = crypto.randomBytes(length);
+    for (let i = 0; i < length; i++) {
+        // Map each byte to a character in the allowed set
+        result += characters.charAt(randomBytes[i] % charactersLength);
+    }
+    return result;
+}
+
+
+// API Routes (backend)
 app.post('/api/signup', async (req, res) => {
     try {
         const {
-            firstName,
-            lastName,
-            email,
-            phone,
-            collegeName,
-            branch,
-            yearOfStudy,
-            rollNumber
+            firstName, lastName, email, phone, collegeName, branch,
+            yearOfStudy, rollNumber
         } = req.body;
 
         // Validate required fields
-        if (!firstName || !lastName || !email || !phone) {
-            console.log('❌ Missing required fields');
-            return res.status(400).json({
-                success: false,
-                message: 'All fields are required'
-            });
+        if (!firstName || !lastName || !email || !phone || !collegeName || !branch || !yearOfStudy || !rollNumber) {
+             console.log('❌ Missing required fields');
+            return res.status(400).json({ success: false, message: 'All registration fields are required.' });
         }
-        console.log('🔍 Checking if user already exists...');
-        // Check if user already exists
+        if (!/\S+@\S+\.\S+/.test(email)) {
+             console.log('❌ Invalid email format');
+            return res.status(400).json({ success: false, message: 'Invalid email format.' });
+        }
+         console.log('🔍 Checking if user already exists...');
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             console.log('❌ User already exists:', email);
-            return res.status(400).json({
-                success: false,
-                message: 'User with this email already exists'
-            });
+            return res.status(400).json({ success: false, message: 'Email already registered.' });
         }
+
+        // --- Generate unique password ---
+        // Take first 4 letters of the first name, lowercase
+        const namePart = firstName.substring(0, 4).toLowerCase();
+        // Pad with 'x' if name is shorter than 4 letters
+        const paddedNamePart = namePart.padEnd(4, 'x');
+        // Generate 6 random alphanumeric characters
+        const randomPart = generateRandomString(6);
+        // Combine parts to form the password
+        const generatedPassword = `${paddedNamePart}${randomPart}`;
+        // Log the plain password (consider removing in production)
+        console.log(`🔑 Generated password for ${email}: ${generatedPassword}`);
+        // --- End Generate unique password ---
+
+
         console.log('👤 Creating new user...');
-        // Create new user with all fields
         const newUser = new User({
-            firstName,
-            lastName,
-            email,
-            phone,
-            collegeName,
-            branch,
-            yearOfStudy,
-            rollNumber,
-            password: 'Student@123', // Set a default password on signup
-            terms: true
+            firstName, lastName, email, phone, collegeName, branch,
+            yearOfStudy, rollNumber,
+            password: generatedPassword, // Pass the PLAIN password here
+            terms: true // Assuming terms are agreed upon
         });
 
-        console.log('💾 Saving user to database...');
-        await newUser.save();
+        console.log('💾 Saving user to database (password will be hashed now)...');
+        await newUser.save(); // Hashing occurs automatically via the pre-save hook
         console.log('✅ User saved successfully!');
         console.log('📊 User ID:', newUser._id);
 
+
+        // Send welcome email with the PLAIN generated credentials
+        try {
+                await transporter.sendMail({
+                    from: process.env.EMAIL_USER,
+                    to: email,
+                    subject: 'Welcome to the Hiring Platform!',
+                    // Use the plain generatedPassword variable here
+                    text: `Hello ${firstName},\n\nWelcome! Your account has been created.\n\nEmail: ${email}\nPassword: ${generatedPassword}\n\nPlease log in and change your password soon.\n\nBest regards,\nThe Team`,
+                    html: `<p>Hello ${firstName},</p><p>Welcome! Your account has been created.</p><p><b>Email:</b> ${email}</p><p><b>Password:</b> ${generatedPassword}</p><p>Please log in and change your password soon.</p><p>Best regards,<br>The Team</p>`
+                });
+                console.log(`✉️ Welcome email sent to ${email}`);
+            } catch (emailError) {
+                console.error(`❌ Error sending welcome email to ${email}:`, emailError);
+                // Log the error but proceed with the registration success response
+            }
+
+
         res.status(201).json({
             success: true,
-            message: 'User registered successfully',
-            user: {
-                id: newUser._id,
-                firstName: newUser.firstName,
-                lastName: newUser.lastName,
-                email: newUser.email,
-                collegeName: newUser.collegeName,
-                branch: newUser.branch,
-                yearOfStudy: newUser.yearOfStudy,
-                rollNumber: newUser.rollNumber
-            }
+            message: 'User registered successfully. Credentials have been sent via email.',
+            user: { id: newUser._id, firstName: newUser.firstName }
         });
 
     } catch (error) {
         console.error('❌ Signup error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Internal server error: ' + error.message
-        });
+        if (error.code === 11000) { // Handle potential duplicate email error
+             res.status(400).json({
+                 success: false,
+                 message: 'Email already exists.'
+             });
+        } else { // Handle other potential errors during save or processing
+             res.status(500).json({
+                 success: false,
+                 message: 'Internal server error during registration.'
+             });
+        }
     }
 });
 
@@ -843,6 +880,8 @@ app.post('/api/admin/login', async (req, res) => {
         res.status(500).json({ message: 'Internal server error' });
     }
 });
+
+// REMOVED /api/admin/send-invite route
 
 // Get admin results
 app.get('/api/admin/results', authenticateToken, async (req, res) => {
