@@ -1,7 +1,6 @@
-// src/components/MyProfile.jsx
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
 const MyProfile = () => {
   const [profile, setProfile] = useState({});
@@ -9,20 +8,84 @@ const MyProfile = () => {
   const [error, setError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState({});
+  const [stats, setStats] = useState({ 
+    testsCompleted: 0,
+    averageScore: 0, // UPDATED: Changed from highestScore to averageScore
+    lastTestInfo: { type: '--', score: '--' },
+  });
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchProfile();
+  const fetchStats = useCallback(async (token, userId) => {
+    if (!token || !userId) return;
+
+    try {
+      // 1. Fetch general test results (MCQ, Paragraph)
+      const generalResultsPromise = axios.get('/api/results', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      // 2. Fetch coding test results
+      const codingSubmissionsPromise = axios.get('/api/coding-submissions', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      const [generalRes, codingRes] = await Promise.all([generalResultsPromise, codingSubmissionsPromise]);
+      
+      const generalResults = (generalRes.data.results || []).map(r => ({ 
+        score: r.score, 
+        completedAt: new Date(r.completedAt).getTime(), 
+        type: r.testType
+      }));
+
+      const codingResults = (codingRes.data.submissions || [])
+        .filter(s => s.overallResult?.score !== undefined)
+        .map(s => ({
+          score: s.overallResult.score,
+          completedAt: new Date(s.submittedAt).getTime(),
+          type: 'Coding'
+        }));
+        
+      const allResults = [...generalResults, ...codingResults];
+
+      const completed = allResults.length;
+      let avgScore = 0; // UPDATED: Variable for average score
+      let lastTest = { type: '--', score: '--' };
+      const allScores = allResults.map(r => r.score);
+
+      if (completed > 0) {
+        // Calculate Average Score
+        const totalScore = allScores.reduce((sum, score) => sum + score, 0);
+        avgScore = Math.round(totalScore / completed); // Calculate and round the average
+        
+        // Find Last Test
+        const sortedByDate = allResults.sort((a, b) => b.completedAt - a.completedAt);
+        lastTest = {
+          type: sortedByDate[0].type,
+          score: sortedByDate[0].score
+        };
+      }
+
+      setStats({
+        testsCompleted: completed,
+        averageScore: avgScore, // UPDATED: Setting average score
+        lastTestInfo: lastTest
+      });
+
+    } catch (err) {
+      console.error('Error fetching student stats:', err);
+    }
   }, []);
 
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     const token = localStorage.getItem('userToken');
-    if (!token) {
+    const userId = localStorage.getItem('userId');
+    if (!token || !userId) {
       navigate('/login');
       return;
     }
     
     try {
+      // Fetch user profile data
       const response = await fetch('/api/user/profile', {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -39,8 +102,14 @@ const MyProfile = () => {
       setError('Network error. Please try again.');
     } finally {
       setLoading(false);
+      // Fetch detailed statistics after profile is loaded
+      fetchStats(token, userId);
     }
-  };
+  }, [navigate, fetchStats]);
+
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -240,33 +309,37 @@ const MyProfile = () => {
         </div>
 
         <div className="profile-stats-grid">
+          {/* Card 1: Tests Completed */}
           <div className="stat-card">
             <div className="stat-icon">
-              <i className="fas fa-trophy"></i>
+              <i className="fas fa-tasks"></i>
             </div>
             <div className="stat-info">
               <h4>Tests Completed</h4>
-              <span className="stat-number">{profile.testsCompleted || 0}</span>
+              <span className="stat-number">{stats.testsCompleted}</span>
             </div>
           </div>
           
+          {/* Card 2: Average Score (Updated) */}
           <div className="stat-card">
-            <div className="stat-icon">
-              <i className="fas fa-chart-line"></i>
+            <div className="stat-icon" style={{ background: 'linear-gradient(135deg, #00c6ff, #0072ff)' }}>
+              <i className="fas fa-chart-line"></i> {/* Changed icon to chart-line */}
             </div>
             <div className="stat-info">
-              <h4>Average Score</h4>
-              <span className="stat-number">{profile.averageScore || '--'}%</span>
+              <h4>Average Score</h4> {/* Changed title to Average Score */}
+              <span className="stat-number">{stats.averageScore}%</span> {/* Displaying average score */}
             </div>
           </div>
           
+          {/* Card 3: Last Test Taken (Kept) */}
           <div className="stat-card">
-            <div className="stat-icon">
-              <i className="fas fa-certificate"></i>
+            <div className="stat-icon" style={{ background: 'linear-gradient(135deg, #f093fb, #f5576c)' }}>
+              <i className="fas fa-history"></i>
             </div>
             <div className="stat-info">
-              <h4>Certificates</h4>
-              <span className="stat-number">{profile.certificates || 0}</span>
+              <h4>Last Test Taken</h4>
+              <span className="stat-number">{stats.lastTestInfo.type}</span>
+              <p className="text-sm text-gray-500 mt-1">Score: {stats.lastTestInfo.score}%</p>
             </div>
           </div>
         </div>

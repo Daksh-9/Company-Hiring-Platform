@@ -538,6 +538,19 @@ app.put('/api/user/profile', authenticateToken, async (req, res) => {
     }
 });
 
+// NEW: Get student's MCQ/Paragraph results
+app.get('/api/results', authenticateToken, async (req, res) => {
+    try {
+        const results = await Result.find({ studentId: req.user.userId })
+            .sort({ completedAt: -1 });
+        
+        res.json({ results });
+    } catch (error) {
+        console.error('Error fetching student general results:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 // NEW PROTECTED ROUTE FOR FETCHING QUESTIONS
 app.get('/api/questions/:testType', authenticateToken, async (req, res) => {
     try {

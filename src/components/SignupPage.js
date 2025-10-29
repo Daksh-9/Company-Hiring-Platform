@@ -209,7 +209,7 @@ const RegisterPage = () => {
             <label className="checkbox-container">
               <input type="checkbox" name="terms" checked={formData.terms} onChange={handleChange} required />
               <span className="checkmark"></span>
-              I agree to the <a href="#" className="terms-link">Terms of Service</a> and <a href="#" className="terms-link">Privacy Policy</a>
+              I agree to the <a href="/terms" className="terms-link">Terms of Service</a> and <a href="/privacy" className="terms-link">Privacy Policy</a>
             </label>
              {/* Display terms error directly below checkbox */}
              {errors.terms && <span className="error-message" style={{ display: 'block', width: '100%', marginTop: '5px' }}>{errors.terms}</span>}
