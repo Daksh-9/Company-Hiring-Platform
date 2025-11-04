@@ -1,15 +1,81 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import axios from 'axios';
+import { toast } from 'react-toastify';
 import useExamGuard from '../../utils/useExamGuard';
 
 const ParagraphTest = () => {
+  // Add new state declarations at the top with other states
+  const [currentParagraph, setCurrentParagraph] = useState('');
+  
+  // Add missing state declarations
+  const [prompts, setPrompts] = useState([]);
   const [currentPrompt, setCurrentPrompt] = useState(0);
   const [paragraphs, setParagraphs] = useState({});
-  const [timeLeft, setTimeLeft] = useState(1500); // 25 minutes in seconds
+  const [timeLeft, setTimeLeft] = useState(1500);
   const [isTestStarted, setIsTestStarted] = useState(false);
   const [isTestCompleted, setIsTestCompleted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [skippedPrompts, setSkippedPrompts] = useState(new Set());
+  const [evaluations, setEvaluations] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const timerRef = useRef(null);
+
+  // Utility: format seconds as M:SS (must be defined before first use)
+  const formatTime = (seconds) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  // Get current prompt helper
+  const currentP = prompts[currentPrompt] || {
+    id: 0,
+    title: '',
+    description: '',
+    wordLimit: 0,
+    timeLimit: 0
+  };
+
+  // Define renderActionButtons function
+  const renderActionButtons = () => (
+    <div className="flex items-center gap-2">
+      <button 
+        className="btn btn-secondary" 
+        onClick={handleSkipPrompt}
+        disabled={isSubmitting}
+      >
+        Skip
+      </button>
+      {currentPrompt === prompts.length - 1 ? (
+        <button 
+          className="btn btn-primary"
+          onClick={handleSubmitTest}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <>
+              <i className="fas fa-spinner fa-spin mr-2"></i>
+              Submitting...
+            </>
+          ) : (
+            <>
+              <i className="fas fa-check mr-2"></i>
+              Submit Test
+            </>
+          )}
+        </button>
+      ) : (
+        <button 
+          className="btn btn-primary"
+          onClick={handleNextPrompt}
+          disabled={isSubmitting}
+        >
+          Next
+          <i className="fas fa-arrow-right ml-2"></i>
+        </button>
+      )}
+    </div>
+  );
 
   useExamGuard({
     enabled: isTestStarted && !isTestCompleted,
@@ -41,38 +107,40 @@ const ParagraphTest = () => {
     }
   });
 
-  const prompts = [
-    {
-      id: 1,
-      title: "Technology and Society",
-      description: "Write a paragraph about how technology has changed society in the last decade. Discuss both positive and negative impacts.",
-      wordLimit: 150,
-      timeLimit: 8 // minutes
-    },
-    {
-      id: 2,
-      title: "Environmental Conservation",
-      description: "Write a paragraph explaining the importance of environmental conservation and what individuals can do to contribute to sustainability efforts.",
-      wordLimit: 120,
-      timeLimit: 6
-    },
-    {
-      id: 3,
-      title: "Remote Work",
-      description: "Write a paragraph about the benefits and challenges of remote work, especially in the context of the modern workplace.",
-      wordLimit: 130,
-      timeLimit: 7
-    },
-    {
-      id: 4,
-      title: "Digital Learning",
-      description: "Write a paragraph about the effectiveness of online learning platforms and how they compare to traditional classroom education.",
-      wordLimit: 140,
-      timeLimit: 7
-    }
-  ];
+  // Load prompts from backend
+  useEffect(() => {
+    const fetchPrompts = async () => {
+      try {
+        const token = localStorage.getItem('userToken');
+        const response = await axios.get('/api/paragraph-questions', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        setPrompts(response.data);
+      } catch (error) {
+        console.error('Error fetching prompts:', error);
+        toast.error('Failed to load test questions');
+      }
+    };
+    
+    fetchPrompts();
+  }, []);
 
+  // Update currentParagraph when currentPrompt changes
+  useEffect(() => {
+    const promptId = currentP?.id;
+    if (promptId) {
+      setCurrentParagraph(paragraphs[promptId] || '');
+    }
+  }, [currentPrompt, paragraphs, currentP]);
+
+  // Calculate word count from current paragraph
+  const wordCount = currentParagraph
+    ? currentParagraph.trim().split(/\s+/).filter(word => word.length > 0).length
+    : 0;
+
+  // Update paragraph change handler
   const handleParagraphChange = (promptId, value) => {
+    setCurrentParagraph(value);
     setParagraphs(prev => ({
       ...prev,
       [promptId]: value
@@ -96,15 +164,87 @@ const ParagraphTest = () => {
     }, 1000);
   };
 
-  const handleSubmitTest = () => {
-    setIsTestCompleted(true);
-    setIsTestStarted(false);
-    setIsPaused(false);
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
+  const handleSubmitTest = async () => {
+    try {
+      setIsSubmitting(true);
+      
+      // Evaluate all completed paragraphs
+      const evaluationResults = {};
+      const answers = Object.entries(paragraphs)
+        .filter(([, text]) => String(text || '').trim().length > 0)
+        .map(([promptId, text]) => ({ promptId, text }));
+      const token = localStorage.getItem('userToken');
+      const resp = await axios.post(
+        '/api/evaluate-paragraph',
+        { answers },
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+      const serverDetails = resp?.data?.details || [];
+      serverDetails.forEach((d) => {
+        evaluationResults[d.promptId] = {
+          score: d.score,
+          totalErrors: d.errors,
+          result: d.passed ? 'Pass' : 'Fail'
+        };
+      });
+      
+      setEvaluations(evaluationResults);
+      setIsTestCompleted(true);
+      setIsTestStarted(false);
+      setIsPaused(false);
+      
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+
+      toast.success('Test submitted successfully');
+    } catch (error) {
+      console.error('Error submitting test:', error);
+      toast.error('Failed to submit test. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
+
+  // Test results summary view
+  if (isTestCompleted) {
+    const totalQuestions = prompts.length;
+    const questionsAttempted = Object.values(paragraphs).filter((t) => String(t || '').trim().length > 0).length;
+    
+    return (
+      <div className="test-results">
+        <div className="results-card">
+          <h2 className="text-2xl font-bold mb-6">Test submitted successfully</h2>
+
+          <div className="results-summary">
+            <div className="summary-item">
+              <span>Total Questions:</span>
+              <span>{totalQuestions}</span>
+            </div>
+            <div className="summary-item">
+              <span>Questions Attempted:</span>
+              <span>{questionsAttempted}</span>
+            </div>
+            <div className="summary-item">
+              <span>Time Taken:</span>
+              <span>{formatTime(1500 - timeLeft)}</span>
+            </div>
+          </div>
+
+          <div className="mt-8 flex justify-center">
+            <button 
+              className="btn btn-primary"
+              onClick={() => window.location.href = '/dashboard'}
+            >
+              <i className="fas fa-home mr-2"></i>
+              Back to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleNextPrompt = () => {
     if (currentPrompt < prompts.length - 1) {
@@ -125,19 +265,11 @@ const ParagraphTest = () => {
     }
   };
 
-  const formatTime = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
+  
 
   const countWords = (text) => {
     return text.trim().split(/\s+/).filter(word => word.length > 0).length;
   };
-
-  const getCurrentPrompt = () => prompts[currentPrompt];
-  const currentParagraph = paragraphs[getCurrentPrompt().id] || '';
-  const wordCount = countWords(currentParagraph);
 
   if (!isTestStarted && !isTestCompleted) {
     return (
@@ -146,92 +278,46 @@ const ParagraphTest = () => {
           <h2>Paragraph Writing Test</h2>
           <div className="test-info">
             <div className="info-item">
-              <i className="fas fa-pen-fancy"></i>
-              <span>{prompts.length} Prompts</span>
-            </div>
-            <div className="info-item">
               <i className="fas fa-clock"></i>
-              <span>25 Minutes</span>
+              <span>Time Limit: 25 minutes</span>
             </div>
             <div className="info-item">
               <i className="fas fa-file-alt"></i>
-              <span>Writing Assessment</span>
+              <span>4 Paragraphs</span>
             </div>
           </div>
-          <div className="test-instructions">
-            <h3>Instructions:</h3>
-            <ul>
-              <li>Write well-structured paragraphs for each prompt</li>
-              <li>Pay attention to word limits for each prompt</li>
-              <li>Focus on clarity, coherence, and grammar</li>
-              <li>Use proper paragraph structure with topic sentences</li>
-              <li>Timer will automatically submit when time runs out</li>
-            </ul>
+          <div className="mt-4">
+            <button 
+              className="btn btn-primary"
+              onClick={handleStartTest}
+            >
+              <i className="fas fa-play mr-2"></i>
+              Start Test
+            </button>
           </div>
-          <button className="btn btn-primary" onClick={handleStartTest}>
-            <i className="fas fa-play"></i>
-            Start Test
-          </button>
         </div>
       </div>
     );
   }
-
-  if (isTestCompleted) {
-    const completedPrompts = Object.keys(paragraphs).length;
-    return (
-      <div className="test-results">
-        <div className="results-card">
-          <h2>Writing Test Completed!</h2>
-          <div className="results-summary">
-            <div className="summary-item">
-              <span>Prompts Completed:</span>
-              <span>{completedPrompts}/{prompts.length}</span>
-            </div>
-            <div className="summary-item">
-              <span>Time Used:</span>
-              <span>{formatTime(1500 - timeLeft)}</span>
-            </div>
-            <div className="summary-item">
-              <span>Total Words Written:</span>
-              <span>{Object.values(paragraphs).reduce((total, para) => total + countWords(para), 0)}</span>
-            </div>
-          </div>
-          <button className="btn btn-primary" onClick={() => window.location.href = '/dashboard'}>
-            <i className="fas fa-home"></i>
-            Back to Dashboard
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const currentP = getCurrentPrompt();
 
   return (
     <div className="w-full h-full flex">
       {/* Sidebar ~20% */}
-      <aside className="hidden md:block w-1/5 border-r bg-white">
-        <div className="p-4 border-b flex items-center justify-between">
-          <span className="font-semibold">Prompts</span>
-          <span className="text-sm text-gray-500">{currentPrompt + 1}/{prompts.length}</span>
-        </div>
-        <div className="p-4 grid grid-cols-5 gap-2">
-          {prompts.map((p, index) => {
-            const hasAnswer = !!paragraphs[p.id]?.length;
+      <aside className="w-1/5 bg-gray-100 p-4 border-r">
+        <h2 className="text-lg font-semibold mb-4">Test Navigation</h2>
+        <div className="flex flex-col space-y-2">
+          {prompts.map((prompt, index) => {
+            const isActive = currentPrompt === index;
             const isSkipped = skippedPrompts.has(index);
-            const base = 'w-10 h-10 rounded border text-sm flex items-center justify-center';
-            const color = hasAnswer
-              ? 'bg-green-500 text-white border-green-500'
-              : isSkipped
-                ? 'bg-gray-300 text-gray-700 border-gray-300'
-                : 'bg-white text-gray-900 border-gray-300';
-            const active = currentPrompt === index ? 'ring-2 ring-indigo-500' : '';
+            const isCompleted = evaluations[prompt.id];
+            const evaluation = isCompleted ? evaluations[prompt.id] : {};
+            
             return (
               <button
-                key={p.id}
-                className={`${base} ${color} ${active}`}
+                key={prompt.id}
+                className={`prompt-nav-btn ${isActive ? 'active' : ''} ${isSkipped ? 'skipped' : ''}`}
                 onClick={() => setCurrentPrompt(index)}
+                disabled={isSubmitting}
                 title={`Prompt ${index + 1}`}
               >
                 {index + 1}
@@ -342,25 +428,12 @@ const ParagraphTest = () => {
           <button 
             className="btn btn-secondary" 
             onClick={handlePreviousPrompt}
-            disabled={currentPrompt === 0}
+            disabled={currentPrompt === 0 || isSubmitting}
           >
-            <i className="fas fa-arrow-left"></i>
+            <i className="fas fa-arrow-left mr-2"></i>
             Previous
           </button>
-          <div className="flex items-center gap-2">
-            <button className="btn btn-secondary" onClick={handleSkipPrompt}>Skip</button>
-            {currentPrompt === prompts.length - 1 ? (
-              <button className="btn btn-primary" onClick={handleSubmitTest}>
-                <i className="fas fa-check"></i>
-                Submit Test
-              </button>
-            ) : (
-              <button className="btn btn-primary" onClick={handleNextPrompt}>
-                Next
-                <i className="fas fa-arrow-right"></i>
-              </button>
-            )}
-          </div>
+          {renderActionButtons()}
         </div>
       </main>
     </div>

@@ -1,0 +1,42 @@
+.prompt-evaluations {
+  margin: 1.5rem 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.evaluation-item {
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background-color: white;
+}
+
+.evaluation-stats {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.result {
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.result.pass {
+  background-color: #10b981;
+  color: white;
+}
+
+.result.fail {
+  background-color: #ef4444;
+  color: white;
+}
+
+.score {
+  font-weight: 600;
+}
+
+.errors {
+  color: #6b7280;
+}

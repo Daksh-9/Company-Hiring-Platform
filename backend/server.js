@@ -110,6 +110,10 @@ const userSchema = new mongoose.Schema({
     createdAt: {
         type: Date,
         default: Date.now
+    },
+    paragraphScore: {
+        type: Number,
+        default: null
     }
 });
 
@@ -226,6 +230,48 @@ const codingQuestionSchema = new mongoose.Schema({
 
 const CodingQuestion = mongoose.model('CodingQuestion', codingQuestionSchema);
 
+
+// Paragraph Question Schema
+const paragraphQuestionSchema = new mongoose.Schema({
+    topic: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    desc: {
+        type: String,
+        required: true
+    },
+    maxScore: {
+        type: Number,
+        default: 100
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now
+    }
+});
+
+const ParagraphQuestion = mongoose.model('ParagraphQuestion', paragraphQuestionSchema);
+
+
+// Paragraph Result Schema
+const paragraphResultSchema = new mongoose.Schema({
+    studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    questionId: { type: mongoose.Schema.Types.ObjectId, ref: 'ParagraphQuestion', required: true },
+    paragraphText: { type: String },
+    totalWords: { type: Number },
+    totalErrors: { type: Number },
+    errorPercent: { type: Number },
+    scorePercent: { type: Number },
+    result: { type: String, enum: ['Pass', 'Fail'] },
+    errorsByType: { type: Object, default: {} },
+    score: { type: Number, required: true },
+    pass: { type: Boolean, required: true },
+    date: { type: Date, default: Date.now }
+});
+
+const ParagraphResult = mongoose.model('ParagraphResult', paragraphResultSchema);
 
 // Result Schema
 const resultSchema = new mongoose.Schema({
@@ -905,14 +951,14 @@ app.get('/api/admin/questions', authenticateToken, async (req, res) => {
     }
 });
 
-// Delete all questions
-app.delete('/api/admin/questions', authenticateToken, async (req, res) => {
+// Delete all MCQ questions only
+app.delete('/api/admin/mcq-questions', authenticateToken, async (req, res) => {
     try {
-        const result = await Question.deleteMany({});
-        console.log(`✅ Deleted ${result.deletedCount} questions.`);
-        res.json({ message: `Successfully deleted ${result.deletedCount} questions.` });
+        const result = await Question.deleteMany({ testType: 'MCQ' });
+        console.log(`✅ Deleted ${result.deletedCount} MCQ questions.`);
+        res.json({ message: `Successfully deleted ${result.deletedCount} MCQ questions.` });
     } catch (error) {
-        console.error('Error deleting questions:', error);
+        console.error('Error deleting MCQ questions:', error);
         res.status(500).json({ message: 'Internal server error' });
     }
 });
@@ -978,6 +1024,17 @@ app.delete('/api/admin/coding-questions/:id', authenticateToken, async (req, res
         res.json({ message: 'Coding question deleted successfully' });
     } catch (error) {
         console.error('Error deleting coding question:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Admin: delete all coding questions
+app.delete('/api/admin/coding-questions', authenticateToken, async (req, res) => {
+    try {
+        const result = await CodingQuestion.deleteMany({});
+        res.json({ message: `Deleted ${result.deletedCount} coding questions` });
+    } catch (error) {
+        console.error('Error deleting all coding questions:', error);
         res.status(500).json({ message: 'Internal server error' });
     }
 });
@@ -1072,6 +1129,235 @@ app.post('/api/admin/upload-coding-questions', authenticateToken, upload.single(
             });
     } catch (error) {
         console.error('Error uploading coding questions:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Upload paragraph questions via CSV (columns: topic, desc, maxScore)
+app.post('/api/admin/upload-paragraph-questions', authenticateToken, upload.single('csvFile'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+
+        const questions = [];
+        const errors = [];
+
+        fs.createReadStream(req.file.path)
+            .pipe(csv())
+            .on('data', (data) => {
+                try {
+                    const topic = (data.topic || '').trim();
+                    const desc = (data.desc || '').trim();
+                    const maxScore = Number(data.maxScore || 100);
+                    if (!topic || !desc) {
+                        errors.push('Row missing required fields: topic or desc');
+                        return;
+                    }
+                    questions.push(new ParagraphQuestion({ topic, desc, maxScore }));
+                } catch (err) {
+                    errors.push(`Error processing row: ${err.message}`);
+                }
+            })
+            .on('end', async () => {
+                try {
+                    if (questions.length === 0) {
+                        fs.unlinkSync(req.file.path);
+                        return res.status(400).json({ message: 'No valid paragraph questions found in CSV', errors });
+                    }
+                    await ParagraphQuestion.insertMany(questions);
+                    fs.unlinkSync(req.file.path);
+                    res.json({ message: 'Paragraph questions uploaded successfully!', count: questions.length, errors: errors.length ? errors : undefined });
+                } catch (error) {
+                    console.error('Error saving paragraph questions:', error);
+                    res.status(500).json({ message: 'Error saving paragraph questions', error: error.message });
+                }
+            })
+            .on('error', (error) => {
+                console.error('CSV parsing error:', error);
+                res.status(500).json({ message: 'Error parsing CSV file' });
+            });
+    } catch (error) {
+        console.error('Error uploading paragraph questions:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Admin: list paragraph questions
+app.get('/api/admin/paragraph-questions', authenticateToken, async (req, res) => {
+    try {
+        const questions = await ParagraphQuestion.find().sort({ createdAt: -1 });
+        res.json({ questions });
+    } catch (error) {
+        console.error('Error fetching paragraph questions:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Admin: delete one paragraph question
+app.delete('/api/admin/paragraph-questions/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const deleted = await ParagraphQuestion.findByIdAndDelete(id);
+        if (!deleted) {
+            return res.status(404).json({ message: 'Paragraph question not found' });
+        }
+        res.json({ message: 'Paragraph question deleted' });
+    } catch (error) {
+        console.error('Error deleting paragraph question:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Admin: delete all paragraph questions
+app.delete('/api/admin/paragraph-questions', authenticateToken, async (req, res) => {
+    try {
+        const result = await ParagraphQuestion.deleteMany({});
+        res.json({ message: `Deleted ${result.deletedCount} paragraph questions` });
+    } catch (error) {
+        console.error('Error deleting all paragraph questions:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Student: list paragraph questions (normalized shape for UI)
+app.get('/api/paragraph-questions', authenticateToken, async (req, res) => {
+    try {
+        const questions = await ParagraphQuestion.find().sort({ createdAt: 1 });
+        const normalized = questions.map((q) => ({
+            id: String(q._id),
+            title: q.topic,
+            description: q.desc,
+            wordLimit: 200,
+            timeLimit: 25
+        }));
+        res.json(normalized);
+    } catch (error) {
+        console.error('Error fetching paragraph questions (student):', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Student: evaluate paragraph(s) via LanguageTool and save result
+app.post('/api/evaluate-paragraph', authenticateToken, async (req, res) => {
+    try {
+        const { answers, studentId: studentIdBody, questionId, text } = req.body;
+        const effectiveStudentId = studentIdBody || req.user.userId;
+
+        const evaluateOne = async (contentText) => {
+            const content = String(contentText || '');
+            const words = content.trim().split(/\s+/).filter(Boolean);
+            const wordCount = words.length || 1;
+
+            const ltResponse = await axios.post('https://api.languagetool.org/v2/check',
+                new URLSearchParams({ language: 'en-US', text: content }),
+                { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 15000 }
+            );
+            const matches = Array.isArray(ltResponse.data?.matches) ? ltResponse.data.matches : [];
+            const errors = matches.length;
+            const errorPercent = Math.max(0, Math.min(100, (errors / wordCount) * 100));
+            const score = Math.max(0, Math.min(100, Math.round(100 - errorPercent)));
+            const passed = score > 40;
+            const errorsByType = { misspelling: 0, grammar: 0, style: 0, other: 0 };
+            for (const m of matches) {
+                const issueType = m?.rule?.issueType || m?.rule?.category?.id || '';
+                const typeLower = String(issueType).toLowerCase();
+                if (typeLower.includes('missp')) errorsByType.misspelling++;
+                else if (typeLower.includes('gram')) errorsByType.grammar++;
+                else if (typeLower.includes('style')) errorsByType.style++;
+                else errorsByType.other++;
+            }
+            const resultLabel = passed ? 'Pass' : 'Fail';
+            return { score, errors, wordCount, passed, errorPercent, scorePercent: score, resultLabel, errorsByType };
+        };
+
+        // Single submission path
+        if (questionId && typeof text === 'string') {
+            const evalRes = await evaluateOne(text);
+            await new ParagraphResult({
+                studentId: effectiveStudentId,
+                questionId,
+                paragraphText: text,
+                totalWords: evalRes.wordCount,
+                totalErrors: evalRes.errors,
+                errorPercent: evalRes.errorPercent,
+                scorePercent: evalRes.scorePercent,
+                result: evalRes.resultLabel,
+                errorsByType: evalRes.errorsByType,
+                score: evalRes.score,
+                pass: evalRes.passed
+            }).save();
+
+            await new Result({
+                studentId: effectiveStudentId,
+                testType: 'Paragraph',
+                score: evalRes.score,
+                totalQuestions: 1
+            }).save();
+
+            await User.findByIdAndUpdate(effectiveStudentId, { paragraphScore: evalRes.score });
+
+            return res.json({
+                success: true,
+                score: evalRes.score,
+                pass: evalRes.passed,
+                total_errors: evalRes.errors,
+                total_words: evalRes.wordCount,
+                error_percent: evalRes.errorPercent,
+                score_percent: evalRes.scorePercent,
+                errors_by_type: evalRes.errorsByType,
+                result: evalRes.resultLabel
+            });
+        }
+
+        // Multiple answers path (compat for multi-prompt UI)
+        if (!Array.isArray(answers) || answers.length === 0) {
+            return res.status(400).json({ message: 'No answers provided' });
+        }
+
+        const results = [];
+        for (const ans of answers) {
+            const r = await evaluateOne(ans.text);
+            results.push({ promptId: ans.promptId, ...r });
+            await new ParagraphResult({
+                studentId: effectiveStudentId,
+                questionId: ans.promptId,
+                paragraphText: ans.text,
+                totalWords: r.wordCount,
+                totalErrors: r.errors,
+                errorPercent: r.errorPercent,
+                scorePercent: r.scorePercent,
+                result: r.resultLabel,
+                errorsByType: r.errorsByType,
+                score: r.score,
+                pass: r.passed
+            }).save();
+        }
+        
+        const avgScore = Math.round(results.reduce((s, r) => s + r.score, 0) / results.length);
+        await new Result({ studentId: effectiveStudentId, testType: 'Paragraph', score: avgScore, totalQuestions: results.length }).save();
+        await User.findByIdAndUpdate(effectiveStudentId, { paragraphScore: avgScore });
+        
+        return res.json({
+            message: 'Paragraph test evaluated and saved',
+            score: avgScore,
+            details: results.map(r => ({
+                promptId: r.promptId,
+                errors: r.errors,
+                wordCount: r.wordCount,
+                errorPercent: r.errorPercent,
+                scorePercent: r.scorePercent,
+                result: r.resultLabel,
+                errorsByType: r.errorsByType,
+                score: r.score,
+                passed: r.passed
+            }))
+        });
+    } catch (error) {
+        console.error('Error evaluating paragraph:', error.message || error);
+        if (error.code === 'ETIMEDOUT') {
+            return res.status(504).json({ message: 'LanguageTool timeout. Try again.' });
+        }
         res.status(500).json({ message: 'Internal server error' });
     }
 });
