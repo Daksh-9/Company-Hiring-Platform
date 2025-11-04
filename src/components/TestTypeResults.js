@@ -124,7 +124,67 @@ const TestTypeResults = () => {
       );
     }
 
-    // Return original table structure for MCQ and Paragraph tests
+    if (testType.toLowerCase() === "paragraph") {
+      return (
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Student Name
+              </th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Questions Attempted
+              </th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Correct Answers
+              </th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Score
+              </th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {results.map((result) => {
+              const score = result.score || 0;
+              const isPass = score >= 60;
+
+              return (
+                <tr key={result._id}>
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                    {result.studentId?.firstName} {result.studentId?.lastName}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center">1</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <div className="flex flex-col items-center gap-1">
+                      <span>{isPass ? "1/1" : "0/1"}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                    {score}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                        isPass
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {isPass ? "Pass" : "Fail"}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      );
+    }
+
+    // Return original table structure for MCQ tests
     return (
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
