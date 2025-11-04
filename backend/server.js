@@ -12,7 +12,6 @@ const nodemailer = require('nodemailer');
 const path = require('path');
 const fs = require('fs');
 const cookieParser = require('cookie-parser');
-const crypto = require('crypto'); // Keep for password generation
 
 const crypto = require('crypto'); // Keep for password generation
 const axios = require('axios');
@@ -930,13 +929,52 @@ app.post('/api/admin/login', async (req, res) => {
 
 // REMOVED /api/admin/send-invite route
 
-// Get admin results
+// Get admin results (COMBINED)
 app.get('/api/admin/results', authenticateToken, async (req, res) => {
     try {
-        const results = await Result.find().populate('studentId', 'firstName lastName email collegeName branch yearOfStudy');
-        res.json({ results });
+        const studentPopulationFields = 'firstName lastName email collegeName branch yearOfStudy';
+
+        // 1. Fetch results from the standard Result collection (MCQ, Paragraph)
+        const standardResults = await Result.find()
+            .populate('studentId', studentPopulationFields)
+            .lean(); // Use .lean() for plain JS objects
+
+        // 2. Fetch results from the CodingSubmission collection
+        const codingSubmissions = await CodingSubmission.find({ 
+                status: 'Completed', 
+                "overallResult.score": { $exists: true } 
+            })
+            .populate('studentId', studentPopulationFields)
+            .lean(); // Use .lean()
+
+        // 3. Normalize coding submissions to match the standard Result format
+        const normalizedCodingResults = codingSubmissions.map(submission => {
+            return {
+                _id: submission._id, // Use submission ID
+                studentId: submission.studentId,
+                testType: 'Coding', // Manually set testType
+                score: submission.overallResult?.score || 0,
+                
+                // --- Add fields needed by TestTypeResults.js for its coding-specific table ---
+                totalQuestions: 1, // Represents 1 coding problem submitted
+                questionsAttempted: 1,
+                testCases: submission.overallResult?.totalTestCases || 0,
+                passedTestCases: submission.overallResult?.passedTestCases || 0,
+                
+                completedAt: submission.submittedAt
+            };
+        });
+        
+        // 4. Combine and send
+        const allResults = [...standardResults, ...normalizedCodingResults];
+
+        // Sort all results by date, newest first
+        allResults.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+
+        res.json({ results: allResults });
+
     } catch (error) {
-        console.error('Error fetching results:', error);
+        console.error('Error fetching all results:', error);
         res.status(500).json({ message: 'Internal server error' });
     }
 });
